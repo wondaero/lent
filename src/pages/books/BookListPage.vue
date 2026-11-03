@@ -8,7 +8,6 @@ import { parseCallQuery, hasCallTokens, classPrefix } from '@/lib/callNumber'
 import { usePagedList } from '@/lib/usePagedList'
 import SearchBox from '@/components/SearchBox.vue'
 import Pagination from '@/components/Pagination.vue'
-import EmptyState from '@/components/EmptyState.vue'
 import KdcTag from '@/components/KdcTag.vue'
 
 defineOptions({ name: 'BookListPage' })
@@ -109,7 +108,7 @@ onActivated(() => { if (mounted) load() })
             </tr>
           </tbody>
         </table>
-        <EmptyState v-if="!loading && !rows.length" art="search" title="찾는 책이 없어요" text="청구기호나 서명을 다르게 입력해 보세요." />
+        <div v-if="!loading && !rows.length" class="empty">검색 결과가 없습니다.</div>
       </div>
       <Pagination v-model="page" :total="total" :per-page="perPage" />
     </div>

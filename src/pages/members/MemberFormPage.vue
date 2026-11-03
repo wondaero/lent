@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { members, loans } from '@/api'
 import { MEMBER_STATUS } from '@/lib/constants'
 import { addDays, fmtDate, fmtDateTime, overdueDays } from '@/lib/format'
-import EmptyState from '@/components/EmptyState.vue'
 import { toast } from '@/stores/toast'
 
 const props = defineProps({ id: String })
@@ -19,7 +18,7 @@ const meta = ref(null)
 const errors = ref({})
 const busy = ref(false)
 
-// 대여 이력
+// 대출 이력
 const range = ref('3m')
 const customFrom = ref(addDays(-30))
 const customTo = ref(addDays(0))
@@ -103,7 +102,7 @@ async function remove() {
 }
 
 function loanState(l) {
-  if (!l.returned_at) return l.overdue ? { label: `연체 ${overdueDays(l.due_at)}일`, tone: 'red' } : { label: '대여중', tone: 'blue' }
+  if (!l.returned_at) return l.overdue ? { label: `연체 ${overdueDays(l.due_at)}일`, tone: 'red' } : { label: '대출중', tone: 'blue' }
   const late = overdueDays(l.due_at, l.returned_at)
   return late ? { label: `반납(연체 ${late}일)`, tone: 'amber' } : { label: '반납', tone: 'gray' }
 }
@@ -142,11 +141,11 @@ function loanState(l) {
             <input v-model="form.address" class="input" />
           </label>
           <label class="field" :class="{ invalid: errors.loan_limit }">
-            <span>최대 대여 권수<b class="req">*</b></span>
+            <span>최대 대출 권수<b class="req">*</b></span>
             <input v-model="form.loan_limit" class="input" type="number" min="1" />
           </label>
           <label class="field" :class="{ invalid: errors.loan_days }">
-            <span>대여 기간(일)<b class="req">*</b></span>
+            <span>대출 기간(일)<b class="req">*</b></span>
             <input v-model="form.loan_days" class="input" type="number" min="1" />
           </label>
           <label class="field">
@@ -163,13 +162,13 @@ function loanState(l) {
       </section>
       <aside class="side stack">
         <section v-if="meta" class="card card-body summary">
-          <div><span class="muted">대여 중</span><strong class="num">{{ meta.active_loans }} / {{ meta.loan_limit }}</strong></div>
+          <div><span class="muted">대출 중</span><strong class="num">{{ meta.active_loans }} / {{ meta.loan_limit }}</strong></div>
           <div><span class="muted">연체</span><strong class="num" :class="{ red: meta.overdue_count }">{{ meta.overdue_count }}건</strong></div>
           <div><span class="muted">가입일</span><span class="num">{{ fmtDateTime(meta.created_at) }}</span></div>
         </section>
         <div class="actions">
           <button class="btn primary lg" type="submit" :disabled="busy">{{ isEdit ? '저장' : '등록' }}</button>
-          <router-link v-if="isEdit" :to="{ path: '/circulation', query: { member: id } }" class="btn lg">대여하기</router-link>
+          <router-link v-if="isEdit" :to="{ path: '/circulation', query: { member: id } }" class="btn lg">대출하기</router-link>
           <button v-if="isEdit" class="btn danger lg" type="button" @click="remove">삭제</button>
           <router-link to="/members" class="btn ghost lg">목록</router-link>
         </div>
@@ -178,7 +177,7 @@ function loanState(l) {
 
     <section v-if="isEdit" class="card">
       <div class="card-head wrap">
-        <h3>대여 이력 <span class="muted num">{{ history.length }}건</span></h3>
+        <h3>대출 이력 <span class="muted num">{{ history.length }}건</span></h3>
         <div class="filters">
           <div class="seg">
             <button v-for="r in [['1m','1개월'],['3m','3개월'],['6m','6개월'],['12m','1년'],['all','전체'],['custom','기간']]" :key="r[0]" :class="{ on: range === r[0] }" @click="range = r[0]">{{ r[1] }}</button>
@@ -193,7 +192,7 @@ function loanState(l) {
       <div v-if="historyLoading" class="loading-bar" />
       <div class="tbl-wrap">
         <table class="tbl">
-          <thead><tr><th>등록번호</th><th>서명</th><th>대여일</th><th>반납예정일</th><th>반납일</th><th>상태</th></tr></thead>
+          <thead><tr><th>등록번호</th><th>서명</th><th>대출일</th><th>반납예정일</th><th>반납일</th><th>상태</th></tr></thead>
           <tbody>
             <tr v-for="l in history" :key="l.id">
               <td class="nowrap num muted">{{ l.book?.reg_no }}</td>
@@ -205,7 +204,7 @@ function loanState(l) {
             </tr>
           </tbody>
         </table>
-        <EmptyState v-if="!historyLoading && !history.length" art="books" title="이 기간에는 빌린 책이 없어요" />
+        <div v-if="!historyLoading && !history.length" class="empty">기간 내 대출 이력이 없습니다.</div>
       </div>
     </section>
   </div>

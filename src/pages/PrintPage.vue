@@ -2,7 +2,6 @@
 import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { books } from '@/api'
 import { callNumberLines } from '@/lib/format'
-import EmptyState from '@/components/EmptyState.vue'
 import { toast } from '@/stores/toast'
 
 const SETTINGS_KEY = 'lent.labelSettings'
@@ -127,7 +126,7 @@ function resetSettings() { Object.assign(s, defaults) }
                 <span class="grow"><span class="t">{{ b.title }}</span><span class="muted num small">{{ b.reg_no }} · {{ callNumberLines(b).join(' ') }}</span></span>
               </label>
             </li>
-            <li v-if="!loading && !candidates.length"><EmptyState art="stump" :size="80" title="라벨을 기다리는 책이 없어요" /></li>
+            <li v-if="!loading && !candidates.length" class="empty small">라벨 미출력 도서가 없습니다.</li>
           </ul>
         </div>
       </section>

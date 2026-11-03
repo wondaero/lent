@@ -54,9 +54,21 @@ function tryIsbn(isbn) {
   lookup()
 }
 
+// ISBN-10과 ISBN-13을 같은 책으로 보고 비교 (978 + 앞 9자리 + 새 체크숫자)
+const searchedIsbn = ref('')
+function toIsbn13(v) {
+  const d = String(v || '').replace(/[^0-9Xx]/g, '')
+  if (d.length !== 10) return d
+  const core = '978' + d.slice(0, 9)
+  const sum = [...core].reduce((s, c, i) => s + +c * (i % 2 ? 3 : 1), 0)
+  return core + ((10 - (sum % 10)) % 10)
+}
+const sameIsbn = (a, b) => !a || !b || toIsbn13(a) === toIsbn13(b)
+
 async function lookup() {
   if (!form.isbn.trim()) return toast('ISBN을 입력해주세요.', 'error')
   lookingUp.value = true
+  searchedIsbn.value = form.isbn.trim()
   try {
     const rows = await books.lookupIsbn(form.isbn.trim())
     if (rows.length === 1) applyCandidate(rows[0])
@@ -277,7 +289,10 @@ const preview = computed(() => callNumberLines(form))
       <div v-if="candidates.length" class="modal-scrim" @click.self="candidates = []">
         <div class="modal card" role="dialog" aria-modal="true" aria-labelledby="cand-title">
           <div class="card-head">
-            <h3 id="cand-title">검색 결과 {{ candidates.length }}건 <span class="muted small">— 등록할 책을 선택하세요</span></h3>
+            <h3 id="cand-title">
+              검색 결과 {{ candidates.length }}건<span v-if="candidates.total > candidates.length" class="muted small"> (전체 {{ candidates.total }}건 중)</span>
+              <span class="muted small hint">— 등록할 책을 선택하세요</span>
+            </h3>
             <button type="button" class="btn ghost sm" aria-label="닫기" @click="candidates = []">✕</button>
           </div>
           <div class="tbl-wrap modal-body">
@@ -285,7 +300,11 @@ const preview = computed(() => callNumberLines(form))
               <thead><tr><th>서명</th><th>권차</th><th>저자</th><th>출판사</th><th>연도</th><th>분류기호</th><th v-if="hasSource">출처</th></tr></thead>
               <tbody>
                 <tr v-for="(c, i) in candidates" :key="i" class="clickable" tabindex="0" @click="applyCandidate(c)" @keydown.enter="applyCandidate(c)">
-                  <td class="title-cell">{{ c.title }}<span v-if="c.series_title" class="sub">{{ c.series_title }}</span></td>
+                  <td class="title-cell">
+                    {{ c.title }}<span v-if="c.series_title" class="sub">{{ c.series_title }}</span>
+                    <!-- KOLIS-NET은 엉뚱한 기록이 섞여 올 때가 있음 → 조회한 ISBN과 다르면 빨간색 -->
+                    <span class="sub num" :class="{ mismatch: !sameIsbn(c.isbn, searchedIsbn) }">ISBN {{ c.isbn }}<template v-if="!sameIsbn(c.isbn, searchedIsbn)"> · 조회한 ISBN과 다름</template></span>
+                  </td>
                   <td class="num nowrap">{{ c.volume ? `v.${c.volume}` : '-' }}</td>
                   <td class="nowrap">{{ c.author }}</td>
                   <td class="nowrap">{{ c.publisher }}</td>
@@ -313,6 +332,8 @@ const preview = computed(() => callNumberLines(form))
 .modal { width: min(860px, 100%); max-height: min(80vh, 640px); display: flex; flex-direction: column; box-shadow: var(--shadow); }
 .modal-body { overflow: auto; }
 .small { font-size: 13px; font-weight: 400; }
+.hint { margin-left: 6px; }
+.sub.mismatch { color: var(--red); }
 .spine { margin: 0 auto; width: 120px; min-height: 120px; border: 1px solid var(--line-strong); border-radius: 6px; padding: 14px 8px; display: grid; align-content: center; justify-items: center; gap: 4px; font-size: 16px; font-weight: 600; background: var(--surface-2); }
 .meta { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 18px 0 0; font-size: 13px; }
 .meta dt { color: var(--text-3); }

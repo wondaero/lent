@@ -5,10 +5,6 @@ import { stats, loans } from '@/api'
 import { KDC } from '@/lib/constants'
 import { num, fmtDate, overdueDays } from '@/lib/format'
 import { toast } from '@/stores/toast'
-import EmptyState from '@/components/EmptyState.vue'
-import Doodle from '@/components/Doodle.vue'
-import { ICONS } from '@/lib/icons'
-import { session } from '@/stores/auth'
 import ChartCanvas from '@/components/ChartCanvas.vue'
 
 const router = useRouter()
@@ -39,23 +35,15 @@ watch(unit, () => loadTrend().catch(toast.error))
 const tiles = computed(() => {
   const s = summary.value
   if (!s) return []
-  // icon/hue: 카드 왼쪽 위 둥근 아이콘. 업무 의미 색(연체=빨강 등)은 값 색으로만 유지
   return [
-    { label: '전체 도서', value: s.totalBooks, unit: '권', to: '/books', icon: ICONS.book, hue: 'brand' },
-    { label: '대여 중', value: s.loanedBooks, unit: '권', to: '/loans', sub: `대여율 ${((s.loanedBooks / s.totalBooks) * 100).toFixed(1)}%`, icon: ICONS.circulation, hue: 'blue' },
-    { label: '연체', value: s.overdueLoans, unit: '건', to: '/loans', tone: s.overdueLoans ? 'red' : '', icon: ICONS.alert, hue: 'red' },
-    { label: '회원', value: s.totalMembers, unit: '명', to: '/members', icon: ICONS.member, hue: 'wood' },
-    { label: '오늘 대여 / 반납', value: `${s.todayLoans} / ${s.todayReturns}`, unit: '건', to: '/circulation', icon: ICONS.today, hue: 'brand' },
-    { label: '라벨 미출력', value: s.unprintedLabels, unit: '권', to: '/print', tone: s.unprintedLabels ? 'amber' : '', icon: ICONS.print, hue: 'wood' },
+    { label: '전체 도서', value: s.totalBooks, unit: '권', to: '/books' },
+    { label: '대출 중', value: s.loanedBooks, unit: '권', to: '/loans', sub: `대출률 ${((s.loanedBooks / s.totalBooks) * 100).toFixed(1)}%` },
+    { label: '연체', value: s.overdueLoans, unit: '건', to: '/loans', tone: s.overdueLoans ? 'red' : '' },
+    { label: '회원', value: s.totalMembers, unit: '명', to: '/members' },
+    { label: '오늘 대출 / 반납', value: `${s.todayLoans} / ${s.todayReturns}`, unit: '건', to: '/circulation' },
+    { label: '라벨 미출력', value: s.unprintedLabels, unit: '권', to: '/print', tone: s.unprintedLabels ? 'amber' : '' },
   ]
 })
-
-// 상단 인사: 시간대별 인사 + 오늘 날짜 + 한 줄 요약
-const greeting = (() => {
-  const h = new Date().getHours()
-  return h < 11 ? '좋은 아침이에요' : h < 17 ? '좋은 오후예요' : '오늘도 수고 많으셨어요'
-})()
-const todayLabel = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })
 
 const categoryConfig = computed(() => {
   const s = summary.value
@@ -88,7 +76,7 @@ const trendConfig = computed(() => {
     data: {
       labels: t.labels,
       datasets: [
-        { label: '대여', data: t.loans, backgroundColor: css('--brand'), borderRadius: 3, order: 2 },
+        { label: '대출', data: t.loans, backgroundColor: css('--brand'), borderRadius: 3, order: 2 },
         { label: '반납', data: t.returns, type: 'line', borderColor: css('--blue'), backgroundColor: css('--blue'), pointRadius: 0, pointHoverRadius: 4, borderWidth: 2, tension: 0.3, order: 1 },
       ],
     },
@@ -107,22 +95,10 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
 
 <template>
   <div class="stack">
-    <section class="hello card">
-      <div class="hello-text">
-        <p class="date muted">{{ todayLabel }}</p>
-        <h2>{{ greeting }}, {{ session.user?.name }}님</h2>
-        <p v-if="summary" class="muted">
-          오늘 <b>{{ summary.todayLoans }}권</b>이 나가고 <b>{{ summary.todayReturns }}권</b>이 돌아왔어요.
-          <template v-if="summary.overdueLoans"> 연체 중인 책이 <b class="t-red">{{ summary.overdueLoans }}건</b> 있어요.</template>
-        </p>
-      </div>
-      <Doodle name="stump" :size="120" class="hello-art" />
-    </section>
-
     <section class="tiles">
       <template v-if="summary">
         <router-link v-for="t in tiles" :key="t.label" :to="t.to" class="tile card" :class="t.tone">
-          <span class="label"><span class="ico" :class="t.hue"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path :d="t.icon" fill="currentColor" /></svg></span>{{ t.label }}</span>
+          <span class="label">{{ t.label }}</span>
           <strong class="value num">{{ typeof t.value === 'number' ? num(t.value) : t.value }}<small>{{ t.unit }}</small></strong>
           <span v-if="t.sub" class="sub">{{ t.sub }}</span>
         </router-link>
@@ -133,7 +109,7 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
     <section class="charts">
       <div class="card">
         <div class="card-head">
-          <h3>기간별 대여 <span class="muted num total">총 {{ num(trendTotal) }}건</span></h3>
+          <h3>기간별 대출 <span class="muted num total">총 {{ num(trendTotal) }}건</span></h3>
           <div class="seg">
             <button :class="{ on: unit === 'day' }" @click="unit = 'day'">일별</button>
             <button :class="{ on: unit === 'week' }" @click="unit = 'week'">주별</button>
@@ -155,7 +131,7 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
       </div>
       <div class="tbl-wrap">
         <table class="tbl">
-          <thead><tr><th>도서</th><th>회원</th><th>대여일</th><th>반납예정일</th><th class="r">연체</th></tr></thead>
+          <thead><tr><th>도서</th><th>회원</th><th>대출일</th><th>반납예정일</th><th class="r">연체</th></tr></thead>
           <tbody>
             <tr v-for="l in overdue" :key="l.id" class="clickable" @click="router.push(`/members/${l.member.id}`)">
               <td class="title-cell">{{ l.book.title }}<span class="sub">{{ l.book.reg_no }}</span></td>
@@ -166,7 +142,7 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
             </tr>
           </tbody>
         </table>
-        <EmptyState v-if="summary && !overdue.length" art="sprout" title="연체 도서가 없어요" text="모든 책이 제때 돌아오고 있어요." />
+        <div v-if="summary && !overdue.length" class="empty">연체 도서가 없습니다.</div>
       </div>
     </section>
   </div>
@@ -176,23 +152,9 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
 .tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
 @media (max-width: 1280px) { .tiles { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
-.tile { display: grid; gap: 6px; padding: 16px 18px; text-decoration: none; color: var(--text); min-height: 104px; transition: border-color .15s, transform .15s; }
-.tile:hover { transform: translateY(-2px); }
+.tile { display: grid; gap: 4px; padding: 16px 18px; text-decoration: none; color: var(--text); min-height: 96px; transition: border-color .15s; }
 .tile:hover { border-color: var(--line-strong); }
-.tile .label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-3); font-weight: 500; }
-.ico { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; flex: none; }
-.ico.brand { background: var(--brand-soft); color: var(--brand); }
-.ico.blue { background: var(--blue-soft); color: var(--blue); }
-.ico.red { background: var(--red-soft); color: var(--red); }
-.ico.wood { background: var(--wood-soft); color: var(--wood-ink); }
-.hello { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; background: linear-gradient(110deg, var(--surface) 55%, var(--wood-soft)); overflow: hidden; }
-.hello h2 { font-size: 20px; margin: 2px 0 6px; }
-.hello p { margin: 0; font-size: 14px; }
-.hello .date { font-size: 13px; }
-.hello b { color: var(--text); }
-.t-red { color: var(--red) !important; }
-.hello-art { margin: -8px 0 -14px; }
-@media (max-width: 640px) { .hello-art { display: none; } }
+.tile .label { font-size: 13px; color: var(--text-3); font-weight: 500; }
 .tile .value { font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
 .tile .value small { font-size: 14px; font-weight: 500; color: var(--text-3); margin-left: 3px; }
 .tile .sub { font-size: 12px; color: var(--text-3); }

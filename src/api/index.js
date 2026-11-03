@@ -5,6 +5,10 @@ import { db, nextId, CATALOG } from './mockDb'
 import { parseCallQuery, hasCallTokens, matchCall, callSortKey, normalizeAuthorMark } from '@/lib/callNumber'
 import { fmtDate } from '@/lib/format'
 
+// Supabase 연결 정보(.env.local). 없으면 목업으로 동작
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
 const LATENCY = 80
 const DAY = 86400000
 const wait = (v) => new Promise((r) => setTimeout(() => r(structuredClone(v)), LATENCY))
@@ -103,18 +107,30 @@ export const books = {
   async remove(id) {
     const b = bookById(id)
     if (!b) return fail('도서를 찾을 수 없습니다.')
-    if (b.status === 'loaned') return fail('대여 중인 도서는 삭제할 수 없습니다.')
+    if (b.status === 'loaned') return fail('대출 중인 도서는 삭제할 수 없습니다.')
     db.books.splice(db.books.indexOf(b), 1)
     return wait(true)
   },
   // ISBN 서지 조회 → 후보 배열. ISBN 하나에 여러 건이 나올 수 있음
-  //   (세트 ISBN의 각 권, 판/쇄 차이, KOLIS-NET 참여 도서관마다 다른 분류)
-  // 추후 Supabase Edge Function(KOLIS-NET 프록시)으로 교체. 반환 형태는 유지할 것
+  //   (세트 ISBN의 각 권, 판/쇄 차이, KOLIS-NET 참여 도서관마다 다른 분류, KOLIS-NET 쪽 데이터 오류)
+  // Supabase가 설정돼 있으면 Edge Function(isbn-lookup, KOLIS-NET 프록시)을 호출하고, 아니면 목업.
+  // 배열에 total(전체 건수) 속성을 붙여 반환 — KOLIS-NET은 한 번에 10건까지만 줌
   async lookupIsbn(isbn) {
     const code = isbn.replace(/-/g, '').trim()
-    // 목업: 외부 서지 목록(CATALOG) 우선, 없으면 소장 도서에서 찾아 후보를 흉내 냄
+    // 개발용 예시 ISBN(가상의 책)은 설정과 무관하게 목업 사용
     const ext = CATALOG.filter((c) => c.isbn === code)
     if (ext.length) return wait(ext)
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/isbn-lookup?isbn=${encodeURIComponent(code)}`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || `서지 조회 실패 (${res.status})`)
+      if (!body.rows?.length) throw new Error('검색 결과가 없습니다.')
+      const rows = body.rows
+      rows.total = body.total
+      return rows
+    }
     const found = db.books.find((b) => b.isbn === code)
     if (!found) return fail('검색 결과가 없습니다.')
     const pick = (b, extra = {}) => ({
@@ -197,13 +213,13 @@ export const members = {
   async remove(id) {
     const m = memberById(id)
     if (!m) return fail('회원을 찾을 수 없습니다.')
-    if (memberStats(m.id).active_loans > 0) return fail('대여 중인 도서가 있는 회원은 삭제할 수 없습니다.')
+    if (memberStats(m.id).active_loans > 0) return fail('대출 중인 도서가 있는 회원은 삭제할 수 없습니다.')
     m.deleted_at = nowIso()
     return wait(true)
   },
 }
 
-/* ───────────── 대여/반납 ───────────── */
+/* ───────────── 대출/반납 ───────────── */
 function withJoin(l) {
   const b = bookById(l.book_id)
   const m = memberById(l.member_id)
@@ -240,14 +256,14 @@ export const loans = {
   async activeByMember(memberId) {
     return wait(db.loans.filter((l) => l.member_id === +memberId && !l.returned_at).map(withJoin))
   },
-  // 스캔한 등록번호의 도서 + 현재 대여 정보(없으면 null) → 화면에서 대여/반납 자동 판별
+  // 스캔한 등록번호의 도서 + 현재 대출 정보(없으면 null) → 화면에서 대출/반납 자동 판별
   async lookup(regNo) {
     const b = db.books.find((x) => x.reg_no.toLowerCase() === regNo.trim().toLowerCase())
     if (!b) return fail(`등록번호 "${regNo}" 도서를 찾을 수 없습니다.`)
     const l = activeLoanOf(b.id)
     return wait({ book: b, loan: l ? withJoin(l) : null })
   },
-  // 반납 + 대여 일괄 처리. 반납을 먼저 반영해 비워진 한도를 대여에 사용.
+  // 반납 + 대출 일괄 처리. 반납을 먼저 반영해 비워진 한도를 대출에 사용.
   // 검증을 모두 끝낸 뒤에 반영하므로 일부만 처리되는 일이 없음.
   // Supabase에서는 단일 RPC(Postgres 함수, 트랜잭션)로 구현할 것
   // returnDate: 반납 처리일(YYYY-MM-DD). 주말 반납함 도서를 월요일에 처리할 때 실제 반납일로 소급. 생략 시 현재 시각
@@ -257,13 +273,13 @@ export const loans = {
     let targets = []
     if (bookIds.length) {
       m = memberById(memberId)
-      if (!m || m.deleted_at) return fail('대여할 회원을 선택해주세요.')
-      if (m.status !== 'active') return fail('대여가 정지된 회원입니다.')
+      if (!m || m.deleted_at) return fail('대출할 회원을 선택해주세요.')
+      if (m.status !== 'active') return fail('대출이 정지된 회원입니다.')
       const freed = returning.filter((l) => l.member_id === m.id).length
-      if (memberStats(m.id).active_loans - freed + bookIds.length > m.loan_limit) return fail(`대여 한도(${m.loan_limit}권)를 초과합니다.`)
+      if (memberStats(m.id).active_loans - freed + bookIds.length > m.loan_limit) return fail(`대출 한도(${m.loan_limit}권)를 초과합니다.`)
       targets = bookIds.map(bookById)
       const bad = targets.find((b) => !b || b.status !== 'available')
-      if (bad) return fail(`"${bad?.title ?? '알 수 없음'}"은(는) 대여할 수 없는 상태입니다.`)
+      if (bad) return fail(`"${bad?.title ?? '알 수 없음'}"은(는) 대출할 수 없는 상태입니다.`)
       if (!dueAt) return fail('반납 예정일을 지정해주세요.')
     }
     const at = nowIso()
@@ -273,7 +289,7 @@ export const loans = {
       retAt = new Date(`${returnDate}T12:00:00`).toISOString()
     }
     for (const l of returning) {
-      // 소급일이 대여일보다 앞서면 대여일로 보정
+      // 소급일이 대출일보다 앞서면 대출일로 보정
       l.returned_at = retAt < l.loaned_at ? l.loaned_at : retAt
       const b = bookById(l.book_id)
       if (b) b.status = 'available'
@@ -286,7 +302,7 @@ export const loans = {
   },
   async extend(loanId, dueAt) {
     const l = db.loans.find((x) => x.id === loanId)
-    if (!l || l.returned_at) return fail('연장할 수 없는 대여입니다.')
+    if (!l || l.returned_at) return fail('연장할 수 없는 대출입니다.')
     l.due_at = new Date(dueAt).toISOString()
     return wait(withJoin(l))
   },

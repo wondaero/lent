@@ -6,7 +6,6 @@ import { MEMBER_STATUS } from '@/lib/constants'
 import { fmtDate, num } from '@/lib/format'
 import { usePagedList } from '@/lib/usePagedList'
 import SearchBox from '@/components/SearchBox.vue'
-import EmptyState from '@/components/EmptyState.vue'
 import Pagination from '@/components/Pagination.vue'
 
 defineOptions({ name: 'MemberListPage' })
@@ -16,9 +15,9 @@ const { filters, page, rows, total, loading, perPage, load } = usePagedList(memb
 
 const tabs = [
   { v: '', label: '전체' },
-  { v: 'loaning', label: '대여중' },
+  { v: 'loaning', label: '대출중' },
   { v: 'overdue', label: '연체' },
-  { v: 'suspended', label: '대여정지' },
+  { v: 'suspended', label: '대출정지' },
 ]
 
 let mounted = false
@@ -45,7 +44,7 @@ onActivated(() => { if (mounted) load() })
       <div class="tbl-wrap">
         <table class="tbl">
           <thead>
-            <tr><th>회원번호</th><th>이름</th><th>전화번호</th><th class="c">대여현황</th><th>상태</th><th>가입일</th></tr>
+            <tr><th>회원번호</th><th>이름</th><th>전화번호</th><th class="c">대출현황</th><th>상태</th><th>가입일</th></tr>
           </thead>
           <tbody>
             <tr v-for="m in rows" :key="m.id" class="clickable" @click="router.push(`/members/${m.id}`)">
@@ -61,7 +60,7 @@ onActivated(() => { if (mounted) load() })
             </tr>
           </tbody>
         </table>
-        <EmptyState v-if="!loading && !rows.length" art="search" title="찾는 회원이 없어요" text="이름이나 전화번호를 다시 확인해 보세요." />
+        <div v-if="!loading && !rows.length" class="empty">검색 결과가 없습니다.</div>
       </div>
       <Pagination v-model="page" :total="total" :per-page="perPage" />
     </div>

@@ -28,12 +28,12 @@ watch(theme, (t) => {
     </section>
 
     <section class="card">
-      <div class="card-head"><h3>대여 기본값</h3><span class="badge gray">준비중</span></div>
+      <div class="card-head"><h3>대출 기본값</h3><span class="badge gray">준비중</span></div>
       <div class="card-body form-grid">
-        <label class="field"><span>기본 대여 권수</span><input class="input" type="number" value="5" disabled /></label>
-        <label class="field"><span>기본 대여 기간(일)</span><input class="input" type="number" value="14" disabled /></label>
+        <label class="field"><span>기본 대출 권수</span><input class="input" type="number" value="5" disabled /></label>
+        <label class="field"><span>기본 대출 기간(일)</span><input class="input" type="number" value="14" disabled /></label>
         <label class="field"><span>연장 가능 횟수</span><input class="input" type="number" value="1" disabled /></label>
-        <label class="field"><span>연체 시 대여정지(일/연체일)</span><input class="input" type="number" value="1" disabled /></label>
+        <label class="field"><span>연체 시 대출정지(일/연체일)</span><input class="input" type="number" value="1" disabled /></label>
       </div>
     </section>
 

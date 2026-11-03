@@ -98,7 +98,7 @@ function build() {
     })
   }
 
-  // 대여 이력: 최근 365일. 오래된 건 반납 완료, 최근 일부는 대여중/연체
+  // 대출 이력: 최근 365일. 오래된 건 반납 완료, 최근 일부는 대출중/연체
   const loans = []
   const activeByMember = new Map()
   let loanId = 1
@@ -117,7 +117,7 @@ function build() {
       if (!keep || active >= member.loan_limit) {
         const late = rand() < 0.12
         returnedAt = loanedAt + int(1, member.loan_days + (late ? 10 : 0)) * DAY
-        // 미래 시점이면 대여일~현재 사이로 분산
+        // 미래 시점이면 대출일~현재 사이로 분산
         if (returnedAt >= now) returnedAt = loanedAt + rand() * (now - loanedAt)
       } else {
         book.status = 'loaned'

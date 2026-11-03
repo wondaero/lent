@@ -1,6 +1,6 @@
 # 그루터기작은도서관 관리자
 
-Vue 3 + Vite. 현재는 목업 데이터로 동작하며, 추후 Supabase로 교체 예정.
+Vue 3 + Vite. 현재는 목업 데이터로 동작하며, 추후 Supabase로 교체 예정. (ISBN 서지 조회는 Supabase Edge Function으로 실제 연동 가능)
 
 ```bash
 npm install
@@ -13,13 +13,37 @@ npm run build
 ```
 src/
   api/index.js      데이터 접근 레이어 — 화면은 여기만 호출. Supabase 연동 시 이 파일만 교체
-  api/mockDb.js     목업 데이터(도서 1,200 / 회원 260 / 대여 1년치). 스키마 = 예정 Supabase 스키마
+  api/mockDb.js     목업 데이터(도서 1,200 / 회원 260 / 대출 1년치). 스키마 = 예정 Supabase 스키마
   lib/              포맷 함수, 상수(KDC, 상태값), usePagedList(목록 공통 로직)
   stores/           로그인 세션, 토스트
   layouts/          사이드바 레이아웃
   components/       Pagination, SearchBox, ChartCanvas, ToastHost
-  pages/            로그인, 대시보드, 대여/반납, 도서, 회원, 대여기록, 라벨출력, 설정
+  pages/            로그인, 대시보드, 대출/반납, 도서, 회원, 대출기록, 라벨출력, 설정
+supabase/functions/
+  isbn-lookup/      Edge Function: ISBN 서지 조회(KOLIS-NET 프록시)
+  _shared/kolis.ts  KOLIS-NET 호출·응답 해석(순수 코드, Node에서도 테스트 가능)
 ```
+
+## ISBN 서지 조회 연동 (Supabase Edge Function)
+
+브라우저에서 KOLIS-NET(http)을 직접 부르면 혼합 콘텐츠·CORS로 막혀서 Edge Function이 대신 호출한다.
+`.env.local`이 없으면 목업으로 동작한다(개발용 예시 ISBN 버튼은 항상 목업).
+
+Supabase 프로젝트: **lent** (ref `gxmgjdfnncaihqbxowgq`, 서울 리전) — 함수 `isbn-lookup` 배포 완료(2026-11-03).
+
+```bash
+npx supabase login                                                   # 브라우저로 로그인 (컴퓨터마다 1회)
+npx supabase functions deploy isbn-lookup --remote=gxmgjdfnncaihqbxowgq   # 함수 수정 후 재배포 (CLI v3)
+cp .env.example .env.local                                           # URL·anon key 채우기 → npm run dev 재시작
+```
+
+- `.env.local`은 git에 없으므로 **새 컴퓨터에서는 다시 만들어야 한다.** anon 키는 대시보드(Project Settings → API Keys → Legacy anon) 또는 `npx supabase projects api-keys --remote=gxmgjdfnncaihqbxowgq`에서 확인. **service_role / secret 키는 절대 앱에 넣지 않는다.**
+- 함수는 JWT 검사가 켜져 있어 키 없이 호출하면 401. 앱은 Legacy anon 키(`eyJ…`)를 쓴다(새 `sb_publishable_` 키는 JWT가 아니라 그대로는 통과하지 않을 수 있음).
+
+- 호출: `GET /functions/v1/isbn-lookup?isbn=9788936434120` → `{ total, rows }`
+- KOLIS-NET은 인증키 불필요. 목록은 한 번에 10건까지(`total`로 전체 건수 표시), 각 건의 분류기호(KDC)·총서명·ISBN은 상세 조회로 채움
+- 응답 정리: KDC만 추출(듀이 제외), 저자 역할어 제거("한강 지음" → "한강"), 권차 인식(`(3)`, `.,제3권`), 총서명 괄호 제거
+- KOLIS-NET 데이터에는 엉뚱한 기록이 섞여 올 때가 있음 → 선택 창에서 ISBN이 다르면 빨간색 표시
 
 ## 성능 관련 원칙
 - 모든 페이지는 라우트 단위 지연 로딩. Chart.js는 대시보드 청크에만 포함
@@ -35,6 +59,6 @@ src/
 ## Supabase 전환 시 메모
 - `books.call_sort_key`는 `callSortKey()`와 같은 규칙으로 저장하고 `COLLATE "C"` 인덱스로 정렬
 - `loans.checkout / checkin`은 여러 테이블을 갱신하므로 Postgres 함수(RPC)로 구현
-- `books.lookupIsbn`은 KOLIS-NET 프록시 Edge Function으로
+- `books.lookupIsbn`은 KOLIS-NET 프록시 Edge Function으로 (구현 완료: `supabase/functions/isbn-lookup`)
 - `stats.*`는 집계 view 또는 RPC로
 - 인증은 Supabase Auth로 교체(`api/index.js`의 `auth`)

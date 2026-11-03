@@ -6,12 +6,11 @@ import { BOOK_STATUS, MEMBER_STATUS } from '@/lib/constants'
 import { addDays, fmtDate, overdueDays } from '@/lib/format'
 import { toast } from '@/stores/toast'
 import KdcTag from '@/components/KdcTag.vue'
-import EmptyState from '@/components/EmptyState.vue'
 
-// 대여/반납 통합 (위 → 아래 한 흐름)
-//   스캔 → 처리 목록(대여 중이면 '반납', 아니면 '대여'로 자동 분류)
-//   → 반납이 있으면 '반납 처리일', 대여가 있으면 '대여할 회원' 칸이 나타남 → 처리하기
-// 반납은 회원 없이 처리(주말 반납함 등), 대여는 한 명씩 처리 후 회원을 자동으로 비움.
+// 대출/반납 통합 (위 → 아래 한 흐름)
+//   스캔 → 처리 목록(대출 중이면 '반납', 아니면 '대출'로 자동 분류)
+//   → 반납이 있으면 '반납 처리일', 대출이 있으면 '대출할 회원' 칸이 나타남 → 처리하기
+// 반납은 회원 없이 처리(주말 반납함 등), 대출은 한 명씩 처리 후 회원을 자동으로 비움.
 
 const route = useRoute()
 const scanInput = ref(null)
@@ -42,8 +41,8 @@ const returns = computed(() => queue.value.filter((q) => q.type === 'return'))
 const lends = computed(() => queue.value.filter((q) => q.type === 'loan'))
 const returningIds = computed(() => new Set(returns.value.map((q) => q.loan.id)))
 
-// 반납에는 회원이 필요 없음. 반납 도서의 대여자는 '대여할 회원' 후보로만 제안(자동 선택 X)
-// → 가족이 대신 반납하고 본인 카드로 빌리는 경우 엉뚱한 회원에게 대여되는 것 방지
+// 반납에는 회원이 필요 없음. 반납 도서의 대출자는 '대출할 회원' 후보로만 제안(자동 선택 X)
+// → 가족이 대신 반납하고 본인 카드로 빌리는 경우 엉뚱한 회원에게 대출되는 것 방지
 const borrowers = computed(() => {
   const map = new Map()
   for (const q of returns.value) {
@@ -69,13 +68,13 @@ const keptOverdue = computed(() => memberLoans.value.filter((l) => l.overdue && 
 
 const problem = computed(() => {
   if (!lends.value.length) return ''
-  if (!member.value) return '대여할 회원을 선택해주세요.'
+  if (!member.value) return '대출할 회원을 선택해주세요.'
   if (blocked.value) return blocked.value
-  if (overLimit.value) return `대여 한도 초과 (${afterCount.value} / ${member.value.loan_limit}권)`
+  if (overLimit.value) return `대출 한도 초과 (${afterCount.value} / ${member.value.loan_limit}권)`
   return ''
 })
 const canProcess = computed(() => queue.value.length > 0 && !problem.value && !busy.value)
-// 대여 쪽 문제로 막혀도 반납은 먼저 처리할 수 있게
+// 대출 쪽 문제로 막혀도 반납은 먼저 처리할 수 있게
 const canReturnOnly = computed(() => !!problem.value && returns.value.length > 0 && !busy.value)
 
 const focusScan = () => nextTick(() => scanInput.value?.focus())
@@ -157,11 +156,11 @@ async function extend(l) {
 }
 
 /* ───── 처리 ───── */
-// mode: 'all'(반납+대여) | 'returns'(반납만)
+// mode: 'all'(반납+대출) | 'returns'(반납만)
 async function processQueue(mode = 'all') {
   if (mode === 'all' ? !canProcess.value : !(returns.value.length && !busy.value)) return
   const doLend = mode === 'all' && lends.value.length > 0
-  if (doLend && keptOverdue.value.length && !confirm(`연체 중인 도서가 ${keptOverdue.value.length}권 있습니다. 그래도 대여하시겠습니까?`)) return
+  if (doLend && keptOverdue.value.length && !confirm(`연체 중인 도서가 ${keptOverdue.value.length}권 있습니다. 그래도 대출하시겠습니까?`)) return
   busy.value = true
   const who = member.value
   try {
@@ -172,11 +171,11 @@ async function processQueue(mode = 'all') {
       dueAt: dueDate.value,
       returnDate: returnDate.value,
     })
-    const parts = [r.returned && `반납 ${r.returned}권`, r.loaned && `${who.name}님 대여 ${r.loaned}권 (~${dueDate.value})`].filter(Boolean)
+    const parts = [r.returned && `반납 ${r.returned}권`, r.loaned && `${who.name}님 대출 ${r.loaned}권 (~${dueDate.value})`].filter(Boolean)
     toast(`${parts.join(' · ')} 완료`)
     queue.value = doLend ? [] : lends.value
     returnDate.value = today   // 소급은 한 번만 적용. 다음 처리부터는 다시 오늘
-    if (doLend) resetMember()  // 대여는 한 명씩 → 다음 사람 대여가 이전 회원에게 붙는 사고 방지
+    if (doLend) resetMember()  // 대출은 한 명씩 → 다음 사람 대출이 이전 회원에게 붙는 사고 방지
     else if (member.value) memberLoans.value = await loans.activeByMember(member.value.id)
   } catch (e) {
     toast.error(e)
@@ -190,16 +189,16 @@ async function processQueue(mode = 'all') {
 const isDev = import.meta.env.DEV
 async function fillSample() {
   try {
-    // 주말 반납함 상황: 여러 회원의 대여 도서(연체 포함) 반납 + 대여 가능 도서 2권
+    // 주말 반납함 상황: 여러 회원의 대출 도서(연체 포함) 반납 + 대출 가능 도서 2권
     const [overdue, active] = await Promise.all([
       loans.list({ state: 'overdue', perPage: 3 }),
       loans.list({ state: 'active', perPage: 3, page: 2 }),
     ])
-    // 한 회원이 여러 권 반납하는 경우도 보이도록 첫 연체 회원의 다른 대여 도서도 포함
+    // 한 회원이 여러 권 반납하는 경우도 보이도록 첫 연체 회원의 다른 대출 도서도 포함
     const first = overdue.rows[0]?.member
     const more = first ? (await loans.activeByMember(first.id)).slice(0, 2) : []
     const rets = [...overdue.rows, ...more, ...active.rows].map((l) => l.book?.reg_no).filter(Boolean)
-    if (!rets.length) return toast('샘플로 쓸 대여 기록이 없습니다.', 'error')
+    if (!rets.length) return toast('샘플로 쓸 대출 기록이 없습니다.', 'error')
     queue.value = []
     resetMember()
     const avail = await books.list({ status: 'available', perPage: 2, sort: 'call', category: '8' })
@@ -223,7 +222,7 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
-const summary = computed(() => [returns.value.length && `반납 ${returns.value.length}`, lends.value.length && `대여 ${lends.value.length}`].filter(Boolean).join(' · '))
+const summary = computed(() => [returns.value.length && `반납 ${returns.value.length}`, lends.value.length && `대출 ${lends.value.length}`].filter(Boolean).join(' · '))
 </script>
 
 <template>
@@ -235,7 +234,7 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
           <input id="scan" ref="scanInput" v-model="code" class="input xl num" placeholder="도서 바코드(등록번호)를 스캔하세요" autocomplete="off" />
         </form>
         <div class="hint-row">
-          <p class="muted hint">대여 중인 도서는 <b class="t-return">반납</b>, 대여 가능한 도서는 <b class="t-loan">대여</b>로 자동 분류됩니다 · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> 처리하기</p>
+          <p class="muted hint">대출 중인 도서는 <b class="t-return">반납</b>, 대출 가능한 도서는 <b class="t-loan">대출</b>로 자동 분류됩니다 · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> 처리하기</p>
           <button v-if="isDev" class="btn ghost sm" type="button" @click="fillSample">샘플 채우기 (개발용)</button>
         </div>
       </section>
@@ -251,7 +250,7 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
           <div v-if="returns.length" class="group-wrap">
             <h4 class="group t-return">반납 {{ returns.length }}</h4>
             <ul class="list">
-              <li v-for="q in returns" :key="q.book.id" class="return pop-in">
+              <li v-for="q in returns" :key="q.book.id" class="return">
                 <KdcTag :class-no="q.book.class_no" />
                 <div class="grow">
                   <div class="t">{{ q.book.title }}</div>
@@ -263,9 +262,9 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
             </ul>
           </div>
           <div v-if="lends.length" class="group-wrap">
-            <h4 class="group t-loan">대여 {{ lends.length }}<span v-if="member" class="muted"> → {{ member.name }}</span></h4>
+            <h4 class="group t-loan">대출 {{ lends.length }}<span v-if="member" class="muted"> → {{ member.name }}</span></h4>
             <ul class="list">
-              <li v-for="q in lends" :key="q.book.id" class="loan pop-in">
+              <li v-for="q in lends" :key="q.book.id" class="loan">
                 <KdcTag :class-no="q.book.class_no" />
                 <div class="grow">
                   <div class="t">{{ q.book.title }}</div>
@@ -288,11 +287,11 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
             <small v-if="returnDate !== today" class="note" title="연체일도 이 날짜 기준으로 계산됩니다">소급 처리 · 연체일도 이 날짜 기준</small>
           </div>
 
-          <!-- 대여가 있을 때만: 대여할 회원 -->
+          <!-- 대출이 있을 때만: 대출할 회원 -->
           <div v-if="lends.length" class="block member-block">
             <template v-if="!member">
               <form class="line" @submit.prevent="searchMember">
-                <span class="block-title">대여할 회원</span>
+                <span class="block-title">대출할 회원</span>
                 <input ref="memberInput" v-model="memberKw" class="input" placeholder="이름 · 전화번호 · 회원번호 입력 후 Enter" />
               </form>
               <div v-if="borrowers.length" class="suggest">
@@ -321,7 +320,7 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
 
             <template v-else>
               <div class="line">
-                <span class="block-title">대여할 회원</span>
+                <span class="block-title">대출할 회원</span>
                 <div class="member-card">
                   <div>
                     <router-link :to="`/members/${member.id}`" class="name">{{ member.name }}</router-link>
@@ -336,14 +335,14 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
               <p v-if="blocked" class="alert red">{{ blocked }}</p>
               <p v-else-if="keptOverdue.length" class="alert amber">반납하지 않은 연체 도서가 {{ keptOverdue.length }}권 있습니다.</p>
 
-              <!-- 반납 예정일 + 현재 대여 중(접기) 한 줄 -->
+              <!-- 반납 예정일 + 현재 대출 중(접기) 한 줄 -->
               <div class="line">
                 <label class="line">
                   <span class="block-title">반납 예정일</span>
                   <input v-model="dueDate" type="date" class="input date" :min="today" />
                 </label>
                 <button v-if="memberLoans.length" class="toggle" @click="showMemberLoans = !showMemberLoans">
-                  {{ showMemberLoans ? '▾' : '▸' }} 현재 대여 중 {{ memberLoans.length }}권<span v-if="keptOverdue.length" class="t-red"> · 연체 {{ keptOverdue.length }}</span>
+                  {{ showMemberLoans ? '▾' : '▸' }} 현재 대출 중 {{ memberLoans.length }}권<span v-if="keptOverdue.length" class="t-red"> · 연체 {{ keptOverdue.length }}</span>
                 </button>
               </div>
               <div v-if="memberLoans.length && showMemberLoans">
@@ -373,7 +372,7 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
         </div>
       </section>
 
-      <div v-else class="card idle"><EmptyState art="scan" :size="110" title="책 바코드를 찍어 주세요" text="반납할 책과 빌릴 책을 섞어 찍어도 알아서 나눠 드려요." /></div>
+      <div v-else class="card idle">도서를 스캔하면 반납/대출이 자동으로 구분되어 여기에 쌓입니다.</div>
     </div>
   </div>
 </template>
@@ -388,7 +387,7 @@ kbd { font: inherit; font-size: 11.5px; padding: 1px 5px; border: 1px solid var(
 .t-return { color: var(--blue); }
 .t-loan { color: var(--brand-ink); }
 .t-red { color: var(--red); }
-.idle { border-style: dashed; border-width: 1.5px; }
+.idle { padding: 48px 16px; text-align: center; color: var(--text-3); border-style: dashed; }
 
 .queue-scroll { max-height: min(40vh, 480px); overflow-y: auto; padding: 14px 18px; display: grid; gap: 14px; }
 .group { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--text-3); }

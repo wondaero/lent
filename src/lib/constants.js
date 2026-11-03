@@ -2,8 +2,8 @@
 export const KDC = ['총류', '철학', '종교', '사회과학', '자연과학', '기술과학', '예술', '언어', '문학', '역사']
 
 export const BOOK_STATUS = {
-  available: { label: '대여가능', tone: 'green' },
-  loaned: { label: '대여중', tone: 'blue' },
+  available: { label: '대출가능', tone: 'green' },
+  loaned: { label: '대출중', tone: 'blue' },
   repair: { label: '수리중', tone: 'amber' },
   lost: { label: '분실', tone: 'red' },
   discarded: { label: '폐기', tone: 'gray' },
@@ -11,7 +11,7 @@ export const BOOK_STATUS = {
 
 export const MEMBER_STATUS = {
   active: { label: '정상', tone: 'green' },
-  suspended: { label: '대여정지', tone: 'red' },
+  suspended: { label: '대출정지', tone: 'red' },
   hold: { label: '보류', tone: 'amber' },
 }
 

@@ -12,10 +12,10 @@ watch(() => route.fullPath, () => (navOpen.value = false))
 
 const nav = [
   { to: '/', label: '대시보드', icon: ICONS.dashboard },
-  { to: '/circulation', label: '대여 / 반납', icon: ICONS.circulation },
+  { to: '/circulation', label: '대출 / 반납', icon: ICONS.circulation },
   { to: '/books', label: '도서', icon: ICONS.book },
   { to: '/members', label: '회원', icon: ICONS.member },
-  { to: '/loans', label: '대여 기록', icon: ICONS.history },
+  { to: '/loans', label: '대출 기록', icon: ICONS.history },
   { to: '/print', label: '라벨 출력', icon: ICONS.print },
   { to: '/settings', label: '설정', icon: ICONS.settings },
 ]
@@ -73,10 +73,9 @@ async function onLogout() {
 .side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; background: var(--surface); border-right: 1px solid var(--line); padding: 16px 12px; }
 .brand { display: flex; align-items: center; gap: 8px; padding: 4px 4px 18px; font-weight: 700; font-size: 16px; letter-spacing: -.02em; color: var(--text); text-decoration: none; white-space: nowrap; }
 nav { display: grid; gap: 2px; }
-nav a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 999px; color: var(--text-2); text-decoration: none; font-size: 14.5px; }
+nav a { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; color: var(--text-2); text-decoration: none; font-size: 14.5px; }
 nav a:hover { background: var(--hover); color: var(--text); }
-nav a.active { background: var(--brand-soft); color: var(--brand-ink); font-weight: 600; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 25%, transparent); }
-nav a.active svg { color: var(--brand); }
+nav a.active { background: var(--brand-soft); color: var(--brand-ink); font-weight: 600; }
 .side-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 8px 0; border-top: 1px solid var(--line); }
 .user { font-size: 14px; font-weight: 600; display: grid; min-width: 0; }
 .user small { font-weight: 400; color: var(--text-3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }

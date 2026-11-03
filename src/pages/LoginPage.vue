@@ -3,7 +3,6 @@ import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { login } from '@/stores/auth'
 import { LIBRARY_NAME } from '@/lib/constants'
-import Doodle from '@/components/Doodle.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,11 +27,6 @@ async function submit() {
 
 <template>
   <div class="login">
-    <!-- 장식: 아래쪽 풀밭 위 새싹과 책 더미 -->
-    <div class="meadow" aria-hidden="true">
-      <Doodle name="sprout" :size="120" class="d1" />
-      <Doodle name="books" :size="130" class="d2" />
-    </div>
     <form class="panel card" @submit.prevent="submit">
       <div class="head">
         <img src="/logo.svg" alt="" width="120" height="80" class="logo" />
@@ -55,16 +49,8 @@ async function submit() {
 </template>
 
 <style scoped>
-.login {
-  position: relative; min-height: 100vh; display: grid; place-items: center; padding: 16px 16px 120px; overflow: hidden;
-  background: radial-gradient(ellipse 80% 60% at 50% 0%, var(--wood-soft), transparent 70%), var(--bg);
-}
-.meadow { position: absolute; left: 0; right: 0; bottom: 0; height: 110px; pointer-events: none;
-  background: radial-gradient(ellipse 70% 100% at 50% 100%, var(--brand-soft), transparent 70%); }
-.meadow .d1 { position: absolute; left: calc(50% - 300px); bottom: 14px; }
-.meadow .d2 { position: absolute; left: calc(50% + 170px); bottom: 10px; }
-.panel { position: relative; width: 100%; max-width: 380px; padding: 32px 28px; display: grid; gap: 16px; box-shadow: var(--shadow); }
-@media (max-width: 720px) { .meadow .d1 { left: 4%; } .meadow .d2 { left: auto; right: 4%; } }
+.login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+.panel { width: 100%; max-width: 380px; padding: 32px 28px; display: grid; gap: 16px; box-shadow: var(--shadow); }
 .head { text-align: center; display: grid; justify-items: center; gap: 4px; margin-bottom: 8px; }
 .head h2 { font-size: 22px; margin-top: 8px; }
 .head p { margin: 0; font-size: 14px; }

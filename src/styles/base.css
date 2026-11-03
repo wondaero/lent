@@ -1,57 +1,48 @@
-/* 색감: 로고(그루터기·새싹)에서 가져온 따뜻한 톤. 크림 종이 배경 + 새싹 초록(주색) + 그루터기 갈색(보조색) */
 :root {
   --brand: #5a9e1a;
   --brand-hover: #4c8915;
-  --brand-soft: #edf5e0;
+  --brand-soft: #eef6e4;
   --brand-ink: #3d6e10;
-  --wood: #c78912;
-  --wood-soft: #f8ecd2;
-  --wood-ink: #8a5d0a;
-  --cream: #f8e3b5;
-  --doodle-ink: #2b2118;     /* 그림 외곽선 */
-  --bg: #f7f4ec;
-  --surface: #fffdf8;
-  --surface-2: #faf6ec;
-  --hover: #f3eedf;
-  --line: #e8e1cf;
-  --line-strong: #d6cdb6;
-  --text: #2a2620;
-  --text-2: #575046;
-  --text-3: #8a8274;
+  --bg: #f6f7f5;
+  --surface: #ffffff;
+  --surface-2: #f9faf8;
+  --hover: #f1f3ef;
+  --line: #e3e6e0;
+  --line-strong: #cfd4ca;
+  --text: #1d211b;
+  --text-2: #4a5146;
+  --text-3: #7c8478;
   --blue: #2f6fd6;
   --blue-soft: #e8f0fc;
   --amber: #b7791f;
   --amber-soft: #fdf3e1;
   --red: #d64545;
   --red-soft: #fdeceb;
-  --gray-soft: #f0ebdf;
-  --shadow: 0 1px 2px rgb(60 40 10 / .05), 0 6px 20px rgb(60 40 10 / .07);
-  --radius: 14px;
-  --radius-sm: 10px;
+  --gray-soft: #eef0ec;
+  --shadow: 0 1px 2px rgb(0 0 0 / .05), 0 4px 16px rgb(0 0 0 / .06);
+  --radius: 10px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --brand: #7cc23a; --brand-hover: #8fd24c; --brand-soft: #24301a; --brand-ink: #a6dc72;
-    --wood: #d9a03a; --wood-soft: #2f2616; --wood-ink: #f0c574; --cream: #3a3020; --doodle-ink: #e9dfcc;
-    --bg: #15130f; --surface: #1e1b16; --surface-2: #24211b; --hover: #2b2720;
-    --line: #353027; --line-strong: #484034;
-    --text: #ede7db; --text-2: #c4bba9; --text-3: #918877;
+    --brand: #7cc23a; --brand-hover: #8fd24c; --brand-soft: #22301a; --brand-ink: #a6dc72;
+    --bg: #121411; --surface: #1a1d18; --surface-2: #1f231d; --hover: #242922;
+    --line: #2d322a; --line-strong: #3b4237;
+    --text: #e8ebe5; --text-2: #b9c0b3; --text-3: #848c7f;
     --blue: #6ea0f0; --blue-soft: #1c2738; --amber: #e0a648; --amber-soft: #33281a;
-    --red: #ef6b6b; --red-soft: #3a1f1f; --gray-soft: #2a2620;
-    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 6px 20px rgb(0 0 0 / .3);
+    --red: #ef6b6b; --red-soft: #3a1f1f; --gray-soft: #262a24;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 4px 16px rgb(0 0 0 / .3);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --brand: #7cc23a; --brand-hover: #8fd24c; --brand-soft: #24301a; --brand-ink: #a6dc72;
-  --wood: #d9a03a; --wood-soft: #2f2616; --wood-ink: #f0c574; --cream: #3a3020; --doodle-ink: #e9dfcc;
-  --bg: #15130f; --surface: #1e1b16; --surface-2: #24211b; --hover: #2b2720;
-  --line: #353027; --line-strong: #484034;
-  --text: #ede7db; --text-2: #c4bba9; --text-3: #918877;
+  --brand: #7cc23a; --brand-hover: #8fd24c; --brand-soft: #22301a; --brand-ink: #a6dc72;
+  --bg: #121411; --surface: #1a1d18; --surface-2: #1f231d; --hover: #242922;
+  --line: #2d322a; --line-strong: #3b4237;
+  --text: #e8ebe5; --text-2: #b9c0b3; --text-3: #848c7f;
   --blue: #6ea0f0; --blue-soft: #1c2738; --amber: #e0a648; --amber-soft: #33281a;
-  --red: #ef6b6b; --red-soft: #3a1f1f; --gray-soft: #2a2620;
-  --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 6px 20px rgb(0 0 0 / .3);
+  --red: #ef6b6b; --red-soft: #3a1f1f; --gray-soft: #262a24;
+  --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 4px 16px rgb(0 0 0 / .3);
   color-scheme: dark;
 }
 
@@ -95,7 +86,7 @@ input, select, textarea, button { font: inherit; color: inherit; }
 /* ── 버튼 ── */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  height: 38px; padding: 0 14px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong);
+  height: 38px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-strong);
   background: var(--surface); cursor: pointer; font-size: 14px; font-weight: 500; white-space: nowrap;
   text-decoration: none; color: var(--text);
 }
@@ -113,7 +104,7 @@ input, select, textarea, button { font: inherit; color: inherit; }
 
 /* ── 폼 ── */
 .input, .select, .textarea {
-  width: 100%; height: 38px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  width: 100%; height: 38px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 8px;
   background: var(--surface); outline: none; font-size: 14.5px;
 }
 .textarea { height: auto; min-height: 90px; padding: 10px 12px; resize: vertical; }
@@ -179,17 +170,4 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); width:
 @media (max-width: 640px) {
   .form-grid .span-2 { grid-column: 1 / -1; }
   .search { min-width: 0; max-width: none; flex-basis: 100%; }
-}
-
-/* ── 빈 상태(그림 + 문구) ── */
-.empty-art { display: grid; justify-items: center; gap: 10px; padding: 36px 16px; text-align: center; color: var(--text-3); }
-.empty-art p { margin: 0; font-size: 14px; }
-.empty-art strong { color: var(--text-2); font-weight: 600; }
-
-/* ── 작은 움직임 ── */
-@keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
-@keyframes sprout { 0% { transform: scale(.4) translateY(6px); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
-.pop-in { animation: pop-in .22s ease-out; }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
 }
