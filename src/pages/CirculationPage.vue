@@ -1,0 +1,450 @@
+<script setup>
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import { useRoute } from 'vue-router'
+import { members, loans, books } from '@/api'
+import { BOOK_STATUS, MEMBER_STATUS } from '@/lib/constants'
+import { addDays, fmtDate, overdueDays } from '@/lib/format'
+import { toast } from '@/stores/toast'
+import KdcTag from '@/components/KdcTag.vue'
+import EmptyState from '@/components/EmptyState.vue'
+
+// 대여/반납 통합 (위 → 아래 한 흐름)
+//   스캔 → 처리 목록(대여 중이면 '반납', 아니면 '대여'로 자동 분류)
+//   → 반납이 있으면 '반납 처리일', 대여가 있으면 '대여할 회원' 칸이 나타남 → 처리하기
+// 반납은 회원 없이 처리(주말 반납함 등), 대여는 한 명씩 처리 후 회원을 자동으로 비움.
+
+const route = useRoute()
+const scanInput = ref(null)
+const memberInput = ref(null)
+
+const code = ref('')
+const queue = ref([])            // { type: 'return' | 'loan', book, loan? }
+const busy = ref(false)
+
+const member = ref(null)
+const memberLoans = shallowRef([])
+const memberKw = ref('')
+const memberResults = shallowRef([])
+const showMemberLoans = ref(false)
+const dueDate = ref(addDays(14))
+
+// 반납 처리일: 주말 반납함 도서는 월요일에 처리해도 실제 넣은 날로 소급해야 부당한 연체가 안 생김
+const today = addDays(0)
+const returnDate = ref(today)
+const lastSaturday = computed(() => {
+  const d = new Date()
+  const back = (d.getDay() + 1) % 7 || 7   // 오늘이 토요일이면 지난주 토요일
+  return addDays(-back)
+})
+const lateOf = (q) => overdueDays(q.loan.due_at, returnDate.value)
+
+const returns = computed(() => queue.value.filter((q) => q.type === 'return'))
+const lends = computed(() => queue.value.filter((q) => q.type === 'loan'))
+const returningIds = computed(() => new Set(returns.value.map((q) => q.loan.id)))
+
+// 반납에는 회원이 필요 없음. 반납 도서의 대여자는 '대여할 회원' 후보로만 제안(자동 선택 X)
+// → 가족이 대신 반납하고 본인 카드로 빌리는 경우 엉뚱한 회원에게 대여되는 것 방지
+const borrowers = computed(() => {
+  const map = new Map()
+  for (const q of returns.value) {
+    const m = q.loan.member
+    if (m && !map.has(m.id)) map.set(m.id, { ...m, count: 0 })
+    if (m) map.get(m.id).count++
+  }
+  return [...map.values()]
+})
+async function pickBorrower(id) {
+  try { await selectMember(await members.get(id)) } catch (e) { toast.error(e) }
+}
+
+// 처리 후 회원이 보유하게 될 권수 (이번에 반납하는 본인 책은 제외)
+const afterCount = computed(() => {
+  if (!member.value) return 0
+  const kept = memberLoans.value.filter((l) => !returningIds.value.has(l.id)).length
+  return kept + lends.value.length
+})
+const overLimit = computed(() => member.value && afterCount.value > member.value.loan_limit)
+const blocked = computed(() => member.value && member.value.status !== 'active' ? `${MEMBER_STATUS[member.value.status]?.label} 상태인 회원입니다.` : '')
+const keptOverdue = computed(() => memberLoans.value.filter((l) => l.overdue && !returningIds.value.has(l.id)))
+
+const problem = computed(() => {
+  if (!lends.value.length) return ''
+  if (!member.value) return '대여할 회원을 선택해주세요.'
+  if (blocked.value) return blocked.value
+  if (overLimit.value) return `대여 한도 초과 (${afterCount.value} / ${member.value.loan_limit}권)`
+  return ''
+})
+const canProcess = computed(() => queue.value.length > 0 && !problem.value && !busy.value)
+// 대여 쪽 문제로 막혀도 반납은 먼저 처리할 수 있게
+const canReturnOnly = computed(() => !!problem.value && returns.value.length > 0 && !busy.value)
+
+const focusScan = () => nextTick(() => scanInput.value?.focus())
+
+/* ───── 스캔 ───── */
+async function scan() {
+  const c = code.value.trim()
+  code.value = ''
+  if (!c) return
+  if (queue.value.some((q) => q.book.reg_no.toLowerCase() === c.toLowerCase())) return toast('이미 목록에 있는 도서입니다.', 'error')
+  try {
+    const { book, loan } = await loans.lookup(c)
+    if (loan) {
+      queue.value.push({ type: 'return', book, loan })
+    } else if (book.status === 'available') {
+      queue.value.push({ type: 'loan', book })
+    } else {
+      toast(`"${book.title}" — ${BOOK_STATUS[book.status]?.label} 상태라 처리할 수 없습니다.`, 'error')
+    }
+  } catch (e) {
+    toast.error(e)
+  } finally {
+    focusScan()
+  }
+}
+
+function removeItem(item) {
+  queue.value.splice(queue.value.indexOf(item), 1)
+  focusScan()
+}
+
+function clearQueue() {
+  queue.value = []
+  focusScan()
+}
+
+/* ───── 회원 ───── */
+async function searchMember() {
+  const kw = memberKw.value.trim()
+  if (!kw) return
+  try {
+    const rows = await members.search(kw)
+    if (rows.length === 1) return selectMember(rows[0])
+    memberResults.value = rows
+    if (!rows.length) toast('검색된 회원이 없습니다.', 'error')
+  } catch (e) { toast.error(e) }
+}
+
+async function selectMember(m) {
+  member.value = m
+  memberResults.value = []
+  memberKw.value = ''
+  showMemberLoans.value = false
+  dueDate.value = addDays(m.loan_days)
+  memberLoans.value = await loans.activeByMember(m.id)
+  focusScan()
+}
+
+function resetMember() {
+  member.value = null
+  memberLoans.value = []
+  memberResults.value = []
+}
+
+function changeMember() {
+  resetMember()
+  nextTick(() => memberInput.value?.focus())
+}
+
+async function extend(l) {
+  const next = addDays(member.value.loan_days, l.due_at)
+  if (!confirm(`"${l.book.title}" 반납일을 ${next}로 연장할까요?`)) return
+  try {
+    await loans.extend(l.id, next)
+    memberLoans.value = await loans.activeByMember(member.value.id)
+    toast('연장했습니다.')
+  } catch (e) { toast.error(e) }
+  focusScan()
+}
+
+/* ───── 처리 ───── */
+// mode: 'all'(반납+대여) | 'returns'(반납만)
+async function processQueue(mode = 'all') {
+  if (mode === 'all' ? !canProcess.value : !(returns.value.length && !busy.value)) return
+  const doLend = mode === 'all' && lends.value.length > 0
+  if (doLend && keptOverdue.value.length && !confirm(`연체 중인 도서가 ${keptOverdue.value.length}권 있습니다. 그래도 대여하시겠습니까?`)) return
+  busy.value = true
+  const who = member.value
+  try {
+    const r = await loans.process({
+      memberId: doLend ? who.id : null,
+      returnIds: returns.value.map((q) => q.loan.id),
+      bookIds: doLend ? lends.value.map((q) => q.book.id) : [],
+      dueAt: dueDate.value,
+      returnDate: returnDate.value,
+    })
+    const parts = [r.returned && `반납 ${r.returned}권`, r.loaned && `${who.name}님 대여 ${r.loaned}권 (~${dueDate.value})`].filter(Boolean)
+    toast(`${parts.join(' · ')} 완료`)
+    queue.value = doLend ? [] : lends.value
+    returnDate.value = today   // 소급은 한 번만 적용. 다음 처리부터는 다시 오늘
+    if (doLend) resetMember()  // 대여는 한 명씩 → 다음 사람 대여가 이전 회원에게 붙는 사고 방지
+    else if (member.value) memberLoans.value = await loans.activeByMember(member.value.id)
+  } catch (e) {
+    toast.error(e)
+  } finally {
+    busy.value = false
+    focusScan()
+  }
+}
+
+/* ───── 개발용 샘플 (npm run dev에서만 버튼 노출, Supabase 연동 시 삭제) ───── */
+const isDev = import.meta.env.DEV
+async function fillSample() {
+  try {
+    // 주말 반납함 상황: 여러 회원의 대여 도서(연체 포함) 반납 + 대여 가능 도서 2권
+    const [overdue, active] = await Promise.all([
+      loans.list({ state: 'overdue', perPage: 3 }),
+      loans.list({ state: 'active', perPage: 3, page: 2 }),
+    ])
+    // 한 회원이 여러 권 반납하는 경우도 보이도록 첫 연체 회원의 다른 대여 도서도 포함
+    const first = overdue.rows[0]?.member
+    const more = first ? (await loans.activeByMember(first.id)).slice(0, 2) : []
+    const rets = [...overdue.rows, ...more, ...active.rows].map((l) => l.book?.reg_no).filter(Boolean)
+    if (!rets.length) return toast('샘플로 쓸 대여 기록이 없습니다.', 'error')
+    queue.value = []
+    resetMember()
+    const avail = await books.list({ status: 'available', perPage: 2, sort: 'call', category: '8' })
+    for (const c of [...new Set(rets)].slice(0, 5).concat(avail.rows.map((b) => b.reg_no))) {
+      code.value = c
+      await scan()
+    }
+  } catch (e) { toast.error(e) }
+}
+
+// Ctrl+Enter: 어디서든 처리하기
+function onKey(e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); processQueue('all') }
+}
+onMounted(async () => {
+  window.addEventListener('keydown', onKey)
+  if (route.query.member) {
+    try { await selectMember(await members.get(route.query.member)) } catch (e) { toast.error(e) }
+  }
+  focusScan()
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+
+const summary = computed(() => [returns.value.length && `반납 ${returns.value.length}`, lends.value.length && `대여 ${lends.value.length}`].filter(Boolean).join(' · '))
+</script>
+
+<template>
+  <div class="circ">
+    <div class="main stack">
+      <section class="card scan-bar">
+        <form @submit.prevent="scan">
+          <label class="sr-only" for="scan">등록번호</label>
+          <input id="scan" ref="scanInput" v-model="code" class="input xl num" placeholder="도서 바코드(등록번호)를 스캔하세요" autocomplete="off" />
+        </form>
+        <div class="hint-row">
+          <p class="muted hint">대여 중인 도서는 <b class="t-return">반납</b>, 대여 가능한 도서는 <b class="t-loan">대여</b>로 자동 분류됩니다 · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> 처리하기</p>
+          <button v-if="isDev" class="btn ghost sm" type="button" @click="fillSample">샘플 채우기 (개발용)</button>
+        </div>
+      </section>
+
+      <section v-if="queue.length" class="card work">
+        <div class="card-head">
+          <h3>처리 목록 <span class="muted num">{{ summary }}</span></h3>
+          <button class="btn ghost sm" @click="clearQueue">비우기</button>
+        </div>
+
+        <!-- 목록: 길어지면 내부 스크롤 → 아래 회원/처리 영역이 화면 밖으로 밀리지 않게 -->
+        <div class="queue-scroll">
+          <div v-if="returns.length" class="group-wrap">
+            <h4 class="group t-return">반납 {{ returns.length }}</h4>
+            <ul class="list">
+              <li v-for="q in returns" :key="q.book.id" class="return pop-in">
+                <KdcTag :class-no="q.book.class_no" />
+                <div class="grow">
+                  <div class="t">{{ q.book.title }}</div>
+                  <div class="muted num small">{{ q.book.reg_no }} · {{ q.loan.member?.name }} · 반납예정 {{ fmtDate(q.loan.due_at) }}</div>
+                </div>
+                <span v-if="lateOf(q)" class="badge red">연체 {{ lateOf(q) }}일</span>
+                <button class="btn ghost sm" aria-label="목록에서 제거" @click="removeItem(q)">✕</button>
+              </li>
+            </ul>
+          </div>
+          <div v-if="lends.length" class="group-wrap">
+            <h4 class="group t-loan">대여 {{ lends.length }}<span v-if="member" class="muted"> → {{ member.name }}</span></h4>
+            <ul class="list">
+              <li v-for="q in lends" :key="q.book.id" class="loan pop-in">
+                <KdcTag :class-no="q.book.class_no" />
+                <div class="grow">
+                  <div class="t">{{ q.book.title }}</div>
+                  <div class="muted num small">{{ q.book.reg_no }} · {{ q.book.author }}</div>
+                </div>
+                <button class="btn ghost sm" aria-label="목록에서 제거" @click="removeItem(q)">✕</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="panel">
+          <!-- 반납이 있을 때만: 반납 처리일 -->
+          <!-- 목록 높이 확보를 위해 제목·입력·안내를 한 줄에 -->
+          <div v-if="returns.length" class="block line ret-date" :class="{ backdated: returnDate !== today }">
+            <span class="block-title">반납 처리일</span>
+            <input v-model="returnDate" type="date" class="input date" :max="today" aria-label="반납 처리일" />
+            <button class="btn sm" :class="{ primary: returnDate === today }" @click="returnDate = today">오늘</button>
+            <button class="btn sm" :class="{ primary: returnDate === lastSaturday }" @click="returnDate = lastSaturday">지난 토요일 (반납함)</button>
+            <small v-if="returnDate !== today" class="note" title="연체일도 이 날짜 기준으로 계산됩니다">소급 처리 · 연체일도 이 날짜 기준</small>
+          </div>
+
+          <!-- 대여가 있을 때만: 대여할 회원 -->
+          <div v-if="lends.length" class="block member-block">
+            <template v-if="!member">
+              <form class="line" @submit.prevent="searchMember">
+                <span class="block-title">대여할 회원</span>
+                <input ref="memberInput" v-model="memberKw" class="input" placeholder="이름 · 전화번호 · 회원번호 입력 후 Enter" />
+              </form>
+              <div v-if="borrowers.length" class="suggest">
+                <span class="muted small">반납한 분이 빌리시나요?</span>
+                <!-- 이름만 배지로. 2권 이상 반납했을 때만 알림 숫자 표시(파랑 = 반납 색). 동명이인은 마우스 오버로 전화번호 확인 -->
+                <button
+                  v-for="b in borrowers.slice(0, 4)" :key="b.id" class="who"
+                  :title="`${b.name} · ${b.phone}${b.count > 1 ? ` · 반납 ${b.count}권` : ''}`"
+                  @click="pickBorrower(b.id)"
+                >
+                  {{ b.name }}
+                  <span v-if="b.count > 1" class="count num" :aria-label="`반납 ${b.count}권`">{{ b.count }}</span>
+                </button>
+                <span v-if="borrowers.length > 4" class="muted small">외 {{ borrowers.length - 4 }}명 — 검색으로 선택</span>
+              </div>
+              <ul v-if="memberResults.length" class="pick">
+                <li v-for="m in memberResults" :key="m.id">
+                  <button @click="selectMember(m)">
+                    <strong>{{ m.name }}</strong>
+                    <span class="muted num">{{ m.phone }} · {{ m.member_no }}</span>
+                    <span class="num">{{ m.active_loans }}/{{ m.loan_limit }}</span>
+                  </button>
+                </li>
+              </ul>
+            </template>
+
+            <template v-else>
+              <div class="line">
+                <span class="block-title">대여할 회원</span>
+                <div class="member-card">
+                  <div>
+                    <router-link :to="`/members/${member.id}`" class="name">{{ member.name }}</router-link>
+                    <span class="muted num small phone">{{ member.phone }} · {{ member.member_no }}</span>
+                  </div>
+                  <div class="quota num" :class="{ warn: overLimit }">
+                    처리 후 <strong>{{ afterCount }}</strong> / {{ member.loan_limit }}권
+                  </div>
+                </div>
+                <button class="btn ghost sm" @click="changeMember">변경</button>
+              </div>
+              <p v-if="blocked" class="alert red">{{ blocked }}</p>
+              <p v-else-if="keptOverdue.length" class="alert amber">반납하지 않은 연체 도서가 {{ keptOverdue.length }}권 있습니다.</p>
+
+              <!-- 반납 예정일 + 현재 대여 중(접기) 한 줄 -->
+              <div class="line">
+                <label class="line">
+                  <span class="block-title">반납 예정일</span>
+                  <input v-model="dueDate" type="date" class="input date" :min="today" />
+                </label>
+                <button v-if="memberLoans.length" class="toggle" @click="showMemberLoans = !showMemberLoans">
+                  {{ showMemberLoans ? '▾' : '▸' }} 현재 대여 중 {{ memberLoans.length }}권<span v-if="keptOverdue.length" class="t-red"> · 연체 {{ keptOverdue.length }}</span>
+                </button>
+              </div>
+              <div v-if="memberLoans.length && showMemberLoans">
+                <ul class="list compact">
+                  <li v-for="l in memberLoans" :key="l.id" :class="{ done: returningIds.has(l.id) }">
+                    <div class="grow">
+                      <div class="t">{{ l.book.title }}</div>
+                      <div class="muted num small">{{ l.book.reg_no }} · 반납예정 {{ fmtDate(l.due_at) }}</div>
+                    </div>
+                    <span v-if="returningIds.has(l.id)" class="badge blue">반납 예정</span>
+                    <template v-else>
+                      <span v-if="l.overdue" class="badge red">연체 {{ overdueDays(l.due_at) }}일</span>
+                      <button class="btn sm" @click="extend(l)">연장</button>
+                    </template>
+                  </li>
+                </ul>
+              </div>
+            </template>
+          </div>
+
+          <p v-if="problem" class="alert red">{{ problem }}</p>
+
+          <div class="actions">
+            <button v-if="canReturnOnly" class="btn lg" @click="processQueue('returns')">반납만 처리 ({{ returns.length }}권)</button>
+            <button class="btn primary lg grow" :disabled="!canProcess" @click="processQueue('all')">처리하기 ({{ summary }})</button>
+          </div>
+        </div>
+      </section>
+
+      <div v-else class="card idle"><EmptyState art="scan" :size="110" title="책 바코드를 찍어 주세요" text="반납할 책과 빌릴 책을 섞어 찍어도 알아서 나눠 드려요." /></div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.circ { max-width: 980px; }
+.scan-bar { padding: 18px; display: grid; gap: 8px; }
+.input.xl { height: 56px; font-size: 20px; padding: 0 18px; }
+.hint { margin: 0; font-size: 13px; }
+.hint-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+kbd { font: inherit; font-size: 11.5px; padding: 1px 5px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface-2); }
+.t-return { color: var(--blue); }
+.t-loan { color: var(--brand-ink); }
+.t-red { color: var(--red); }
+.idle { border-style: dashed; border-width: 1.5px; }
+
+.queue-scroll { max-height: min(40vh, 480px); overflow-y: auto; padding: 14px 18px; display: grid; gap: 14px; }
+.group { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--text-3); }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.list li { display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.list li.return { border-left: 3px solid var(--blue); }
+.list li.loan { border-left: 3px solid var(--brand); }
+.list li.done { opacity: .55; }
+.list li.done .t { text-decoration: line-through; }
+.list.compact { margin-top: 6px; }
+.list .grow { flex: 1; min-width: 0; }
+.list .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.small { font-size: 12.5px; }
+
+/* 처리 영역은 화면 하단에 붙어 있어서 목록이 길어도 처리 버튼이 항상 보임 */
+.panel { position: sticky; bottom: 0; z-index: 2; border-top: 1px solid var(--line); padding: 14px 18px 18px; display: grid; gap: 12px; background: var(--surface-2); border-radius: 0 0 var(--radius) var(--radius); box-shadow: 0 -6px 16px -10px rgb(0 0 0 / .18); }
+.block { display: grid; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+/* 한 줄 배치: 제목(고정폭) + 입력. 제목 폭을 맞춰 세로로 정렬되게 */
+.line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.line > .block-title { flex: 0 0 78px; }
+.line > .input:not(.date), .line > .member-card { flex: 1; min-width: 200px; }
+.block-title { font-size: 13px; font-weight: 700; color: var(--text-2); }
+
+.input.date { width: 160px; height: 34px; }
+.ret-date.backdated { background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 40%, transparent); }
+.ret-date .note { color: var(--amber); font-size: 12.5px; }
+.member-block { border-left: 3px solid var(--brand); }
+.member-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 12px; border-radius: 8px; background: var(--brand-soft); flex-wrap: wrap; }
+.member-card .name { font-size: 17px; font-weight: 700; color: var(--text); text-decoration: none; }
+.member-card .phone { margin-left: 8px; }
+.quota { font-size: 13.5px; }
+.quota strong { font-size: 18px; }
+.quota.warn { color: var(--red); }
+.toggle { margin-left: auto; border: 0; background: none; padding: 2px 0; cursor: pointer; font-size: 13px; color: var(--text-2); }
+
+.suggest { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 8px; padding: 4px 0 0 86px; }
+.who {
+  position: relative; height: 28px; padding: 0 12px; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--line-strong); background: var(--surface); font-size: 13.5px; font-weight: 600;
+}
+.who:hover { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-ink); }
+/* 문자 알림처럼 오른쪽 위에 붙는 숫자 */
+.who .count {
+  position: absolute; top: -7px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px; background: var(--blue); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.pick { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; max-height: 240px; overflow: auto; }
+.pick li + li { border-top: 1px solid var(--line); }
+.pick button { width: 100%; display: flex; gap: 10px; align-items: center; padding: 9px 12px; border: 0; background: none; cursor: pointer; text-align: left; }
+.pick button:hover { background: var(--hover); }
+.pick button .muted { flex: 1; font-size: 13px; }
+.alert { margin: 0; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; }
+.alert.red { background: var(--red-soft); color: var(--red); }
+.alert.amber { background: var(--amber-soft); color: var(--amber); }
+.actions { display: flex; gap: 8px; }
+.actions .grow { flex: 1; }
+@media (max-width: 640px) { .suggest { padding-left: 0; } }
+</style>
