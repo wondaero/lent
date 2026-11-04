@@ -3,7 +3,7 @@ import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { stats, loans } from '@/api'
 import { KDC } from '@/lib/constants'
-import { num, fmtDate, overdueDays } from '@/lib/format'
+import { num, fmtDate, overdueDays, dueOf } from '@/lib/format'
 import { toast } from '@/stores/toast'
 import ChartCanvas from '@/components/ChartCanvas.vue'
 
@@ -137,8 +137,8 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
               <td class="title-cell">{{ l.book.title }}<span class="sub">{{ l.book.reg_no }}</span></td>
               <td class="nowrap">{{ l.member.name }}<span class="sub">{{ l.member.phone }}</span></td>
               <td class="nowrap num">{{ fmtDate(l.loaned_at) }}</td>
-              <td class="nowrap num">{{ fmtDate(l.due_at) }}</td>
-              <td class="r"><span class="badge red num">{{ overdueDays(l.due_at) }}일</span></td>
+              <td class="nowrap num">{{ fmtDate(dueOf(l)) }}</td>
+              <td class="r"><span class="badge red num">{{ overdueDays(dueOf(l)) }}일</span></td>
             </tr>
           </tbody>
         </table>

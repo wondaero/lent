@@ -4,9 +4,12 @@
 // books   : id, reg_no, isbn, title, series_title, author, publisher, pub_year,
 //           class_no, author_mark, volume, copy_no, call_sort_key, status, label_printed, memo, created_at
 import { callSortKey, makeAuthorMark } from '@/lib/callNumber'
+import { fmtRegNo } from '@/lib/regNo'
 // members : id, member_no, name, phone, birth, gender, address, loan_limit, loan_days,
 //           status, memo, created_at, deleted_at
-// loans   : id, book_id, member_id, loaned_at, due_at, returned_at
+// loans   : id, book_id, member_id, loaned_at, due_at, extended_due_at, returned_at
+//           due_at = 대출 때 정한 반납 예정일(변경 안 함), extended_due_at = 마지막 연장 반납일(없으면 null)
+// settings: key, value — barcode_last_no = 마지막으로 출력한 바코드 라벨 번호(등록번호 숫자 부분)
 
 let seed = 20240123
 function rand() {
@@ -59,7 +62,7 @@ function build() {
     const volume = rand() < 0.15 ? String(int(1, 5)) : ''
     books.push({
       id: i,
-      reg_no: `EM${String(i).padStart(6, '0')}`,
+      reg_no: fmtRegNo(i),
       isbn: `97889${String(int(10000000, 99999999))}`,
       title: volume ? `${title} ${volume}` : title,
       series_title: volume ? title : '',
@@ -129,12 +132,14 @@ function build() {
         member_id: member.id,
         loaned_at: iso(loanedAt),
         due_at: iso(dueAt),
+        extended_due_at: null,
         returned_at: returnedAt ? iso(returnedAt) : null,
       })
     }
   }
 
-  return { books, members, loans }
+  // 기존 도서 번호까지는 바코드 라벨이 출력된 상태로 시작
+  return { books, members, loans, settings: { barcode_last_no: BOOK_COUNT } }
 }
 
 export const db = build()

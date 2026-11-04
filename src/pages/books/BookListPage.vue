@@ -9,6 +9,8 @@ import { usePagedList } from '@/lib/usePagedList'
 import SearchBox from '@/components/SearchBox.vue'
 import Pagination from '@/components/Pagination.vue'
 import KdcTag from '@/components/KdcTag.vue'
+import ExportButton from '@/components/ExportButton.vue'
+import { exportXlsx, fetchAll } from '@/lib/exportXlsx'
 
 defineOptions({ name: 'BookListPage' })
 
@@ -35,6 +37,24 @@ const chips = computed(() => {
 watch(() => hasCallTokens(parsed.value), (isCall) => {
   if (isCall && filters.sort === 'recent') filters.sort = 'call'
 })
+
+async function exportList() {
+  const all = await fetchAll(books.list, filters)
+  await exportXlsx('도서목록', [
+    { header: '등록번호', value: (b) => b.reg_no, width: 11 },
+    { header: '청구기호', value: (b) => callNumberLines(b).join(' '), width: 18 },
+    { header: '서명', value: (b) => b.title, width: 30 },
+    { header: '총서명', value: (b) => b.series_title, width: 16 },
+    { header: '저자', value: (b) => b.author, width: 14 },
+    { header: '출판사', value: (b) => b.publisher, width: 12 },
+    { header: '발행연도', value: (b) => b.pub_year, width: 8 },
+    { header: 'ISBN', value: (b) => b.isbn, width: 15 },
+    { header: '상태', value: (b) => BOOK_STATUS[b.status]?.label, width: 8 },
+    { header: '대출자', value: (b) => b.loan?.member_name, width: 8 },
+    { header: '반납예정일', value: (b) => fmtDate(b.loan?.due_at) },
+    { header: '등록일', value: (b) => fmtDate(b.created_at) },
+  ], all)
+}
 
 let mounted = false
 onMounted(() => { load(); mounted = true })
@@ -68,11 +88,14 @@ onActivated(() => { if (mounted) load() })
     <div class="card">
       <div class="card-head">
         <span class="muted">총 <strong class="num" style="color: var(--text)">{{ num(total) }}</strong>권</span>
-        <select v-model="filters.sort" class="select sort" aria-label="정렬">
-          <option value="recent">최신 등록순</option>
-          <option value="call">청구기호순 (서가순)</option>
-          <option value="title">서명순</option>
-        </select>
+        <div class="head-right">
+          <select v-model="filters.sort" class="select sort" aria-label="정렬">
+            <option value="recent">최신 등록순</option>
+            <option value="call">청구기호순 (서가순)</option>
+            <option value="title">서명순</option>
+          </select>
+          <ExportButton :run="exportList" />
+        </div>
       </div>
       <div v-if="loading" class="loading-bar" />
       <div class="tbl-wrap">
@@ -116,6 +139,7 @@ onActivated(() => { if (mounted) load() })
 </template>
 
 <style scoped>
+.head-right { display: flex; align-items: center; gap: 8px; }
 .w-auto { width: auto; }
 .sort { width: auto; height: 32px; font-size: 13.5px; }
 .parsed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 12px; font-size: 13px; }

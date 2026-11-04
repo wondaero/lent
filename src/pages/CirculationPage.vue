@@ -3,9 +3,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 
 import { useRoute } from 'vue-router'
 import { members, loans, books } from '@/api'
 import { BOOK_STATUS, MEMBER_STATUS } from '@/lib/constants'
-import { addDays, fmtDate, overdueDays } from '@/lib/format'
+import { addDays, dueOf, fmtDate, lastSaturday as lastSat, overdueDays } from '@/lib/format'
 import { toast } from '@/stores/toast'
 import KdcTag from '@/components/KdcTag.vue'
+import LoanActionDialog from '@/components/LoanActionDialog.vue'
 
 // 대출/반납 통합 (위 → 아래 한 흐름)
 //   스캔 → 처리 목록(대출 중이면 '반납', 아니면 '대출'로 자동 분류)
@@ -30,12 +31,8 @@ const dueDate = ref(addDays(14))
 // 반납 처리일: 주말 반납함 도서는 월요일에 처리해도 실제 넣은 날로 소급해야 부당한 연체가 안 생김
 const today = addDays(0)
 const returnDate = ref(today)
-const lastSaturday = computed(() => {
-  const d = new Date()
-  const back = (d.getDay() + 1) % 7 || 7   // 오늘이 토요일이면 지난주 토요일
-  return addDays(-back)
-})
-const lateOf = (q) => overdueDays(q.loan.due_at, returnDate.value)
+const lastSaturday = lastSat()
+const lateOf = (q) => overdueDays(dueOf(q.loan), returnDate.value)
 
 const returns = computed(() => queue.value.filter((q) => q.type === 'return'))
 const lends = computed(() => queue.value.filter((q) => q.type === 'loan'))
@@ -144,15 +141,15 @@ function changeMember() {
   nextTick(() => memberInput.value?.focus())
 }
 
-async function extend(l) {
-  const next = addDays(member.value.loan_days, l.due_at)
-  if (!confirm(`"${l.book.title}" 반납일을 ${next}로 연장할까요?`)) return
-  try {
-    await loans.extend(l.id, next)
-    memberLoans.value = await loans.activeByMember(member.value.id)
-    toast('연장했습니다.')
-  } catch (e) { toast.error(e) }
+// 연장: 날짜 확인 창(기본 오늘 + 대출기간, 변경 가능)
+const extendTarget = ref(null)
+function closeExtend() {
+  extendTarget.value = null
   focusScan()
+}
+async function onExtended() {
+  memberLoans.value = await loans.activeByMember(member.value.id)
+  closeExtend()
 }
 
 /* ───── 처리 ───── */
@@ -211,6 +208,7 @@ async function fillSample() {
 
 // Ctrl+Enter: 어디서든 처리하기
 function onKey(e) {
+  if (extendTarget.value) return
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); processQueue('all') }
 }
 onMounted(async () => {
@@ -254,7 +252,7 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
                 <KdcTag :class-no="q.book.class_no" />
                 <div class="grow">
                   <div class="t">{{ q.book.title }}</div>
-                  <div class="muted num small">{{ q.book.reg_no }} · {{ q.loan.member?.name }} · 반납예정 {{ fmtDate(q.loan.due_at) }}</div>
+                  <div class="muted num small">{{ q.book.reg_no }} · {{ q.loan.member?.name }} · 반납예정 {{ fmtDate(dueOf(q.loan)) }}</div>
                 </div>
                 <span v-if="lateOf(q)" class="badge red">연체 {{ lateOf(q) }}일</span>
                 <button class="btn ghost sm" aria-label="목록에서 제거" @click="removeItem(q)">✕</button>
@@ -282,8 +280,8 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
           <div v-if="returns.length" class="block line ret-date" :class="{ backdated: returnDate !== today }">
             <span class="block-title">반납 처리일</span>
             <input v-model="returnDate" type="date" class="input date" :max="today" aria-label="반납 처리일" />
-            <button class="btn sm" :class="{ primary: returnDate === today }" @click="returnDate = today">오늘</button>
-            <button class="btn sm" :class="{ primary: returnDate === lastSaturday }" @click="returnDate = lastSaturday">지난 토요일 (반납함)</button>
+            <button class="btn sm" :class="{ on: returnDate === today }" @click="returnDate = today">오늘</button>
+            <button class="btn sm" :class="{ on: returnDate === lastSaturday }" @click="returnDate = lastSaturday">지난 토요일 (반납함)</button>
             <small v-if="returnDate !== today" class="note" title="연체일도 이 날짜 기준으로 계산됩니다">소급 처리 · 연체일도 이 날짜 기준</small>
           </div>
 
@@ -350,12 +348,12 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
                   <li v-for="l in memberLoans" :key="l.id" :class="{ done: returningIds.has(l.id) }">
                     <div class="grow">
                       <div class="t">{{ l.book.title }}</div>
-                      <div class="muted num small">{{ l.book.reg_no }} · 반납예정 {{ fmtDate(l.due_at) }}</div>
+                      <div class="muted num small">{{ l.book.reg_no }} · 반납예정 {{ fmtDate(dueOf(l)) }}</div>
                     </div>
                     <span v-if="returningIds.has(l.id)" class="badge blue">반납 예정</span>
                     <template v-else>
-                      <span v-if="l.overdue" class="badge red">연체 {{ overdueDays(l.due_at) }}일</span>
-                      <button class="btn sm" @click="extend(l)">연장</button>
+                      <span v-if="l.overdue" class="badge red">연체 {{ overdueDays(dueOf(l)) }}일</span>
+                      <button class="btn sm" @click="extendTarget = l">연장</button>
                     </template>
                   </li>
                 </ul>
@@ -366,7 +364,7 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
           <p v-if="problem" class="alert red">{{ problem }}</p>
 
           <div class="actions">
-            <button v-if="canReturnOnly" class="btn lg" @click="processQueue('returns')">반납만 처리 ({{ returns.length }}권)</button>
+            <button v-if="canReturnOnly" class="btn lg secondary" @click="processQueue('returns')">반납만 처리 ({{ returns.length }}권)</button>
             <button class="btn primary lg grow" :disabled="!canProcess" @click="processQueue('all')">처리하기 ({{ summary }})</button>
           </div>
         </div>
@@ -374,6 +372,7 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
 
       <div v-else class="card idle">도서를 스캔하면 반납/대출이 자동으로 구분되어 여기에 쌓입니다.</div>
     </div>
+    <LoanActionDialog :loan="extendTarget" mode="extend" @close="closeExtend" @done="onExtended" />
   </div>
 </template>
 

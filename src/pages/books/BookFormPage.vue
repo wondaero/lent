@@ -5,6 +5,7 @@ import { books } from '@/api'
 import { BOOK_STATUS } from '@/lib/constants'
 import { callNumberLines, fmtDateTime } from '@/lib/format'
 import { makeAuthorMark } from '@/lib/callNumber'
+import { fmtRegNo, normalizeRegNo, parseRegNo } from '@/lib/regNo'
 import KdcTag from '@/components/KdcTag.vue'
 import { toast } from '@/stores/toast'
 
@@ -22,6 +23,26 @@ const errors = ref({})
 const busy = ref(false)
 const lookingUp = ref(false)
 
+// 등록번호: 미리 출력해 책에 붙인 바코드를 스캔해서 넣는다(자동 번호는 책의 라벨과 어긋날 수 있어 쓰지 않음)
+const regInput = ref(null)
+const barcode = ref(null)   // { lastIssued } — 아직 출력하지 않은 번호로 등록하려 할 때 확인용
+const regNoBad = computed(() => !!form.reg_no.trim() && parseRegNo(form.reg_no) == null)
+// 스캐너는 번호 뒤에 Enter를 보낸다 → 저장하지 않고 ISBN 칸으로
+function onRegEnter() {
+  form.reg_no = normalizeRegNo(form.reg_no)
+  if (parseRegNo(form.reg_no) == null) return toast('등록번호 형식이 올바르지 않습니다. (예: EM00005724)', 'error')
+  document.getElementById('isbn')?.focus()
+}
+function confirmUnissued() {
+  const n = parseRegNo(form.reg_no)
+  if (isEdit.value || !barcode.value || n <= barcode.value.lastIssued) return true
+  return confirm(`${form.reg_no}은(는) 아직 바코드 라벨로 출력하지 않은 번호입니다.\n책에 붙은 바코드 번호가 맞나요?`)
+}
+async function newEntry() {
+  barcode.value = await books.barcodeState()
+  nextTick(() => regInput.value?.focus())
+}
+
 onMounted(async () => {
   try {
     if (isEdit.value) {
@@ -29,7 +50,7 @@ onMounted(async () => {
       Object.keys(form).forEach((k) => (form[k] = b[k] ?? ''))
       meta.value = { created_at: b.created_at, label_printed: b.label_printed }
     } else {
-      form.reg_no = await books.nextRegNo()
+      await newEntry()
     }
   } catch (e) {
     toast.error(e)
@@ -116,7 +137,7 @@ function genMark() {
 
 function validate() {
   const e = {}
-  if (!form.reg_no.trim()) e.reg_no = true
+  if (parseRegNo(form.reg_no) == null) e.reg_no = true
   if (!form.title.trim()) e.title = true
   if (!form.author.trim()) e.author = true
   if (!form.class_no.trim()) e.class_no = true
@@ -127,9 +148,10 @@ function validate() {
 
 async function save() {
   if (!validate()) return toast('필수 항목을 확인해주세요.', 'error')
+  if (!confirmUnissued()) return
   busy.value = true
   try {
-    const data = { ...form, reg_no: form.reg_no.trim(), title: form.title.trim() }
+    const data = { ...form, reg_no: normalizeRegNo(form.reg_no), title: form.title.trim() }
     if (isEdit.value) {
       await books.update(props.id, data)
       toast('저장했습니다.')
@@ -147,13 +169,15 @@ async function save() {
 
 async function saveAndNew() {
   if (!validate()) return toast('필수 항목을 확인해주세요.', 'error')
+  if (!confirmUnissued()) return
   busy.value = true
   try {
-    await books.create({ ...form })
+    await books.create({ ...form, reg_no: normalizeRegNo(form.reg_no) })
     toast(`"${form.title}" 등록 완료`)
-    // 같은 책 복본/다음 권 연속 등록을 위해 서지는 유지하고 번호만 갱신
+    // 같은 책 복본/다음 권 연속 등록을 위해 서지는 유지. 등록번호는 다음 책의 바코드를 스캔
     const keep = { series_title: form.series_title, author: form.author, publisher: form.publisher, pub_year: form.pub_year, class_no: form.class_no, author_mark: form.author_mark }
-    Object.assign(form, empty(), keep, { reg_no: await books.nextRegNo() })
+    Object.assign(form, empty(), keep)
+    await newEntry()
   } catch (e) {
     toast.error(e)
   } finally {
@@ -181,11 +205,17 @@ const preview = computed(() => callNumberLines(form))
       <section class="card">
         <div class="card-head"><h3>서지 정보</h3></div>
         <div class="card-body form-grid">
+          <label class="field span-2" :class="{ invalid: errors.reg_no || regNoBad }">
+            <span>등록번호<b class="req">*</b></span>
+            <input ref="regInput" v-model="form.reg_no" class="input num" :placeholder="isEdit ? '' : '책에 붙인 바코드를 스캔하세요'" @keydown.enter.prevent="onRegEnter" />
+            <small v-if="regNoBad">형식: EM + 숫자 8자리 (예: EM00005724)</small>
+            <small v-else-if="!isEdit && barcode">바코드 라벨은 {{ fmtRegNo(barcode.lastIssued) }}까지 출력되어 있습니다</small>
+          </label>
           <div class="field span-2">
             <label for="isbn">ISBN</label>
             <div class="inline">
               <input id="isbn" v-model="form.isbn" class="input" inputmode="numeric" placeholder="978…" @keydown.enter.prevent="lookup" />
-              <button type="button" class="btn" :disabled="lookingUp" @click="lookup">{{ lookingUp ? '조회 중…' : '서지 조회' }}</button>
+              <button type="button" class="btn secondary" :disabled="lookingUp" @click="lookup">{{ lookingUp ? '조회 중…' : '서지 조회' }}</button>
             </div>
             <div v-if="isDev && !isEdit" class="samples">
               <span class="muted">예시 (개발용)</span>
@@ -243,11 +273,6 @@ const preview = computed(() => callNumberLines(form))
             <span>복본</span>
             <input v-model="form.copy_no" class="input" placeholder="예: 2" />
           </label>
-          <label class="field" :class="{ invalid: errors.reg_no }">
-            <span>등록번호<b class="req">*</b></span>
-            <input v-model="form.reg_no" class="input num" />
-            <small>바코드에 사용되는 번호</small>
-          </label>
           <label class="field">
             <span>상태</span>
             <select v-model="form.status" class="select" :disabled="form.status === 'loaned'">
@@ -278,7 +303,7 @@ const preview = computed(() => callNumberLines(form))
       </section>
       <div class="actions">
         <button class="btn primary lg" type="submit" :disabled="busy">{{ isEdit ? '저장' : '등록' }}</button>
-        <button v-if="!isEdit" class="btn lg" type="button" :disabled="busy" @click="saveAndNew">등록 후 계속</button>
+        <button v-if="!isEdit" class="btn lg secondary" type="button" :disabled="busy" @click="saveAndNew">등록 후 계속</button>
         <button v-if="isEdit" class="btn danger lg" type="button" @click="remove">삭제</button>
         <router-link to="/books" class="btn ghost lg">목록</router-link>
       </div>

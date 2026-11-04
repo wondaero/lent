@@ -20,6 +20,14 @@ export function addDays(days, from = new Date()) {
   return fmtDate(d)
 }
 
+// 반납함 소급 기준일. 오늘이 토요일이면 지난주 토요일
+export function lastSaturday() {
+  return addDays(-((new Date().getDay() + 1) % 7 || 7))
+}
+
+// 실제 반납 기한:연장했으면 연장 반납일, 아니면 처음 반납 예정일
+export const dueOf = (loan) => loan.extended_due_at || loan.due_at
+
 // 연체일수(오늘 기준, 반납 완료면 반납일 기준)
 export function overdueDays(dueAt, returnedAt) {
   const end = returnedAt ? new Date(returnedAt) : new Date()

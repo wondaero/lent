@@ -7,6 +7,8 @@ import { fmtDate, num } from '@/lib/format'
 import { usePagedList } from '@/lib/usePagedList'
 import SearchBox from '@/components/SearchBox.vue'
 import Pagination from '@/components/Pagination.vue'
+import ExportButton from '@/components/ExportButton.vue'
+import { exportXlsx, fetchAll } from '@/lib/exportXlsx'
 
 defineOptions({ name: 'MemberListPage' })
 
@@ -19,6 +21,21 @@ const tabs = [
   { v: 'overdue', label: '연체' },
   { v: 'suspended', label: '대출정지' },
 ]
+
+// 개인정보: 주소·생년월일은 내보내지 않는다(파일로 퍼지기 쉬움). 연락에 필요한 항목만
+async function exportList() {
+  const all = await fetchAll(members.list, filters)
+  await exportXlsx('회원목록', [
+    { header: '회원번호', value: (m) => m.member_no, width: 10 },
+    { header: '이름', value: (m) => m.name, width: 8 },
+    { header: '전화번호', value: (m) => m.phone, width: 14 },
+    { header: '대출중', value: (m) => m.active_loans, num: true, width: 7 },
+    { header: '대출한도', value: (m) => m.loan_limit, num: true, width: 8 },
+    { header: '연체', value: (m) => m.overdue_count, num: true, width: 6 },
+    { header: '상태', value: (m) => MEMBER_STATUS[m.status]?.label, width: 8 },
+    { header: '가입일', value: (m) => fmtDate(m.created_at) },
+  ], all)
+}
 
 let mounted = false
 onMounted(() => { load(); mounted = true })
@@ -39,6 +56,7 @@ onActivated(() => { if (mounted) load() })
     <div class="card">
       <div class="card-head">
         <span class="muted">총 <strong class="num" style="color: var(--text)">{{ num(total) }}</strong>명</span>
+        <ExportButton :run="exportList" />
       </div>
       <div v-if="loading" class="loading-bar" />
       <div class="tbl-wrap">

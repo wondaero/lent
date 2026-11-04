@@ -19,7 +19,10 @@
   --red: #d64545;
   --red-soft: #fdeceb;
   --gray-soft: #eef0ec;
+  --excel: #217346;
   --shadow: 0 1px 2px rgb(0 0 0 / .05), 0 4px 16px rgb(0 0 0 / .06);
+  --shade: #000;
+  --btn-highlight: rgb(255 255 255 / .35);
   --radius: 10px;
   color-scheme: light;
 }
@@ -30,8 +33,9 @@
     --line: #2d322a; --line-strong: #3b4237;
     --text: #e8ebe5; --text-2: #b9c0b3; --text-3: #848c7f;
     --blue: #6ea0f0; --blue-soft: #1c2738; --amber: #e0a648; --amber-soft: #33281a;
-    --red: #ef6b6b; --red-soft: #3a1f1f; --gray-soft: #262a24;
+    --red: #ef6b6b; --red-soft: #3a1f1f; --gray-soft: #262a24; --excel: #4fb07a;
     --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 4px 16px rgb(0 0 0 / .3);
+    --btn-highlight: rgb(255 255 255 / .07);
     color-scheme: dark;
   }
 }
@@ -41,8 +45,9 @@
   --line: #2d322a; --line-strong: #3b4237;
   --text: #e8ebe5; --text-2: #b9c0b3; --text-3: #848c7f;
   --blue: #6ea0f0; --blue-soft: #1c2738; --amber: #e0a648; --amber-soft: #33281a;
-  --red: #ef6b6b; --red-soft: #3a1f1f; --gray-soft: #262a24;
+  --red: #ef6b6b; --red-soft: #3a1f1f; --gray-soft: #262a24; --excel: #4fb07a;
   --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 4px 16px rgb(0 0 0 / .3);
+  --btn-highlight: rgb(255 255 255 / .07);
   color-scheme: dark;
 }
 
@@ -86,21 +91,46 @@ input, select, textarea, button { font: inherit; color: inherit; }
 /* ── 버튼 ── */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  height: 38px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-strong);
+  height: calc(var(--h) - var(--ledge)); margin-bottom: var(--ledge);
+  padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-strong);
   background: var(--surface); cursor: pointer; font-size: 14px; font-weight: 500; white-space: nowrap;
   text-decoration: none; color: var(--text);
+  /* 입체 버튼: 배지(평평)와 한눈에 구분되도록 아래쪽 턱(흐림 없는 단색) + 위쪽 밝은 선.
+     아랫면 기준: 윗판(--h - --ledge) + 턱(--ledge) = 입력칸 높이(--h)라서 옆 입력칸과 윗면·아랫면이 다 맞는다.
+     누르면 윗판이 턱만큼 내려앉아 바닥에 닿는다. 턱 색(--edge)은 버튼 색보다 한 단계 진하게 */
+  --h: 38px;
+  --ledge: 3px;
+  --edge: color-mix(in srgb, var(--line-strong), var(--shade) 18%);
+  box-shadow: inset 0 1px 0 var(--btn-highlight), 0 var(--ledge) 0 var(--edge);
+  transition: background-color .12s, box-shadow .06s, transform .06s;
 }
 .btn:hover { background: var(--hover); }
+.btn:active:not(:disabled) { transform: translateY(var(--ledge)); box-shadow: inset 0 1px 0 var(--btn-highlight), 0 0 0 var(--edge); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
-.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn.primary { --edge: color-mix(in srgb, var(--brand), var(--shade) 30%); background: var(--brand); border-color: var(--brand); color: #fff; }
 .btn.primary:hover:not(:disabled) { background: var(--brand-hover); }
-.btn.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
+.btn.danger { --edge: color-mix(in srgb, var(--red) 45%, var(--line-strong)); color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
 .btn.danger:hover { background: var(--red-soft); }
-.btn.ghost { border-color: transparent; background: transparent; }
-.btn.ghost:hover { background: var(--hover); }
-.btn.sm { height: 30px; padding: 0 10px; font-size: 13px; }
-.btn.lg { height: 46px; padding: 0 20px; font-size: 15px; }
+/* 버튼 색은 동작의 의미가 아니라 중요도로 정한다(업무 색 의미는 상태 배지·목록 표시에만).
+   primary(화면/창마다 하나) > secondary(자주 쓰는 보조) > 기본 .btn = tertiary > ghost, 삭제는 danger */
+.btn.secondary { --edge: color-mix(in srgb, var(--brand) 45%, var(--line-strong)); background: var(--brand-soft); border-color: color-mix(in srgb, var(--brand) 35%, var(--line)); color: var(--brand-ink); }
+.btn.secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--brand) 18%, var(--surface)); }
+/* 선택됨(날짜 빠른 선택, 현재 페이지). primary를 빌려 쓰면 화면에 진한 초록이 여러 개 생겨서 따로 둔다 */
+/* 선택됨 = 이미 눌린 상태로 표시(턱 없이 내려앉음) */
+.btn.on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-ink); font-weight: 600; box-shadow: none; transform: translateY(var(--ledge)); }
+/* ghost는 "조용한 버튼": 테두리 없는 연회색 윗판 + 턱(평평하면 회색 배지와 헷갈림).
+   테두리를 넣으면 tertiary와 같아져서 안 넣음 */
+.btn.ghost { --edge: color-mix(in srgb, var(--line-strong), var(--shade) 8%); border-color: transparent; background: var(--hover); }
+.btn.ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--hover), var(--text) 7%); }
+/* 아이콘만 있는 ghost(✕, 메뉴 — aria-label로 이름을 준 버튼)는 목록에 반복되므로 투명·평평 */
+.btn.ghost[aria-label], .btn.ghost[aria-label]:active:not(:disabled) { --ledge: 0px; background: transparent; box-shadow: none; transform: none; }
+.btn.ghost[aria-label]:hover:not(:disabled) { background: var(--hover); }
+.btn.sm { --h: 30px; padding: 0 10px; font-size: 13px; }
+.btn.lg { --h: 46px; padding: 0 20px; font-size: 15px; }
 .btn.icon { width: 38px; padding: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+}
 
 /* ── 폼 ── */
 .input, .select, .textarea {

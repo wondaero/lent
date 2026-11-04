@@ -3,8 +3,10 @@ import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { members, loans } from '@/api'
 import { MEMBER_STATUS } from '@/lib/constants'
-import { addDays, fmtDate, fmtDateTime, overdueDays } from '@/lib/format'
+import { addDays, dueOf, fmtDate, fmtDateTime, overdueDays } from '@/lib/format'
 import { toast } from '@/stores/toast'
+import { exportXlsx } from '@/lib/exportXlsx'
+import ExportButton from '@/components/ExportButton.vue'
 
 const props = defineProps({ id: String })
 const router = useRouter()
@@ -101,9 +103,22 @@ async function remove() {
   }
 }
 
+function exportHistory() {
+  return exportXlsx(`대출이력_${form.name}`, [
+    { header: '등록번호', value: (l) => l.book?.reg_no, width: 11 },
+    { header: '서명', value: (l) => l.book?.title ?? '(삭제된 도서)', width: 30 },
+    { header: '저자', value: (l) => l.book?.author, width: 14 },
+    { header: '대출일', value: (l) => fmtDate(l.loaned_at) },
+    { header: '반납예정일', value: (l) => fmtDate(l.due_at) },
+    { header: '연장 반납일', value: (l) => fmtDate(l.extended_due_at) },
+    { header: '반납일', value: (l) => fmtDate(l.returned_at) },
+    { header: '상태', value: (l) => loanState(l).label, width: 14 },
+  ], history.value)
+}
+
 function loanState(l) {
-  if (!l.returned_at) return l.overdue ? { label: `연체 ${overdueDays(l.due_at)}일`, tone: 'red' } : { label: '대출중', tone: 'blue' }
-  const late = overdueDays(l.due_at, l.returned_at)
+  if (!l.returned_at) return l.overdue ? { label: `연체 ${overdueDays(dueOf(l))}일`, tone: 'red' } : { label: '대출중', tone: 'blue' }
+  const late = overdueDays(dueOf(l), l.returned_at)
   return late ? { label: `반납(연체 ${late}일)`, tone: 'amber' } : { label: '반납', tone: 'gray' }
 }
 </script>
@@ -168,7 +183,7 @@ function loanState(l) {
         </section>
         <div class="actions">
           <button class="btn primary lg" type="submit" :disabled="busy">{{ isEdit ? '저장' : '등록' }}</button>
-          <router-link v-if="isEdit" :to="{ path: '/circulation', query: { member: id } }" class="btn lg">대출하기</router-link>
+          <router-link v-if="isEdit" :to="{ path: '/circulation', query: { member: id } }" class="btn lg secondary">대출하기</router-link>
           <button v-if="isEdit" class="btn danger lg" type="button" @click="remove">삭제</button>
           <router-link to="/members" class="btn ghost lg">목록</router-link>
         </div>
@@ -187,6 +202,7 @@ function loanState(l) {
             <span class="muted">~</span>
             <input v-model="customTo" type="date" class="input date" aria-label="종료일" />
           </template>
+          <ExportButton v-if="history.length" :run="exportHistory" />
         </div>
       </div>
       <div v-if="historyLoading" class="loading-bar" />
@@ -198,7 +214,7 @@ function loanState(l) {
               <td class="nowrap num muted">{{ l.book?.reg_no }}</td>
               <td class="title-cell">{{ l.book?.title ?? '(삭제된 도서)' }}<span class="sub">{{ l.book?.author }}</span></td>
               <td class="nowrap num">{{ fmtDate(l.loaned_at) }}</td>
-              <td class="nowrap num">{{ fmtDate(l.due_at) }}</td>
+              <td class="nowrap num">{{ fmtDate(dueOf(l)) }}<span v-if="l.extended_due_at" class="sub">연장</span></td>
               <td class="nowrap num">{{ fmtDate(l.returned_at) || '-' }}</td>
               <td><span class="badge" :class="loanState(l).tone">{{ loanState(l).label }}</span></td>
             </tr>

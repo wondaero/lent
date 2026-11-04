@@ -3,7 +3,8 @@
 // 함수 시그니처와 반환 형태({ rows, total } 등)를 유지할 것.
 import { db, nextId, CATALOG } from './mockDb'
 import { parseCallQuery, hasCallTokens, matchCall, callSortKey, normalizeAuthorMark } from '@/lib/callNumber'
-import { fmtDate } from '@/lib/format'
+import { fmtDate, dueOf } from '@/lib/format'
+import { fmtRegNo, normalizeRegNo, parseRegNo } from '@/lib/regNo'
 
 // Supabase 연결 정보(.env.local). 없으면 목업으로 동작
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -22,7 +23,7 @@ function paginate(rows, page = 1, perPage = 20) {
 }
 const has = (v, kw) => v != null && String(v).toLowerCase().includes(kw)
 
-const isOverdue = (loan) => !loan.returned_at && new Date(loan.due_at).getTime() < startOfToday()
+const isOverdue = (loan) => !loan.returned_at && new Date(dueOf(loan)).getTime() < startOfToday()
 
 /* ───────────── 인증 ───────────── */
 const SESSION_KEY = 'lent.session'
@@ -45,6 +46,10 @@ export const auth = {
 /* ───────────── 도서 ───────────── */
 const bookById = (id) => db.books.find((b) => b.id === +id)
 const memberById = (id) => db.members.find((m) => m.id === +id)
+
+function lastBarcodeNo() {
+  return db.books.reduce((m, b) => Math.max(m, parseRegNo(b.reg_no) ?? 0), db.settings.barcode_last_no)
+}
 
 function activeLoanOf(bookId) {
   return db.loans.find((l) => l.book_id === bookId && !l.returned_at)
@@ -72,7 +77,7 @@ export const books = {
     const result = paginate(rows, page, perPage)
     result.rows = result.rows.map((b) => {
       const loan = b.status === 'loaned' ? activeLoanOf(b.id) : null
-      return loan ? { ...b, loan: { due_at: loan.due_at, member_name: memberById(loan.member_id)?.name } } : b
+      return loan ? { ...b, loan: { due_at: dueOf(loan), member_name: memberById(loan.member_id)?.name } } : b
     })
     return wait(result)
   },
@@ -84,12 +89,32 @@ export const books = {
     const b = db.books.find((x) => x.reg_no.toLowerCase() === regNo.trim().toLowerCase())
     return b ? wait(b) : fail(`등록번호 "${regNo}" 도서를 찾을 수 없습니다.`)
   },
-  async nextRegNo() {
-    return wait(`EM${String(nextId.books).padStart(6, '0')}`)
+  // 바코드 라벨 출력 상태. 출력 기록보다 큰 번호로 등록된 책이 있으면 그 다음부터(라벨 번호 겹침 방지)
+  async barcodeState() {
+    const last = lastBarcodeNo()
+    return wait({ lastIssued: last, next: fmtRegNo(last + 1) })
+  },
+  // 바코드 라벨 출력 완료 표시: from(숫자)부터 count장. 그 사이 다른 PC에서 먼저 출력했으면 실패.
+  // Supabase: settings 행을 잠그고 "barcode_last_no = from - 1"일 때만 갱신하는 RPC
+  async issueBarcodes(from, count) {
+    if (from !== lastBarcodeNo() + 1) return fail('그 사이 다른 곳에서 바코드를 출력했습니다. 화면을 새로고침한 뒤 다시 확인해주세요.')
+    db.settings.barcode_last_no = from + count - 1
+    return wait({ lastIssued: db.settings.barcode_last_no, next: fmtRegNo(db.settings.barcode_last_no + 1) })
+  },
+  // 인쇄를 취소했을 때 번호 되돌리기. 그 뒤로 더 출력됐거나 그 번호로 등록된 책이 있으면 되돌리지 않는다
+  // (번호가 비는 건 괜찮지만 겹치면 안 됨). Supabase: issueBarcodes와 같은 조건부 갱신 RPC
+  async releaseBarcodes(from, count) {
+    const last = from + count - 1
+    const used = db.books.some((b) => { const n = parseRegNo(b.reg_no); return n != null && n >= from })
+    if (db.settings.barcode_last_no !== last || used) return fail(`이미 다음 번호가 사용되어 되돌리지 않았습니다. ${fmtRegNo(from)} ~ ${fmtRegNo(last)}은(는) 건너뜁니다.`)
+    db.settings.barcode_last_no = from - 1
+    return wait({ lastIssued: from - 1, next: fmtRegNo(from) })
   },
   async create(data) {
-    if (db.books.some((b) => b.reg_no === data.reg_no)) return fail('이미 사용 중인 등록번호입니다.')
-    const row = { ...data, id: nextId.books++, status: data.status || 'available', label_printed: false, created_at: nowIso() }
+    const reg = normalizeRegNo(data.reg_no)
+    if (parseRegNo(reg) == null) return fail('등록번호 형식이 올바르지 않습니다. (예: EM00005724)')
+    if (db.books.some((b) => b.reg_no === reg)) return fail('이미 사용 중인 등록번호입니다.')
+    const row = { ...data, reg_no: reg, id: nextId.books++, status: data.status || 'available', label_printed: false, created_at: nowIso() }
     row.author_mark = normalizeAuthorMark(row.author_mark)
     row.call_sort_key = callSortKey(row)
     db.books.push(row)
@@ -98,7 +123,11 @@ export const books = {
   async update(id, data) {
     const b = bookById(id)
     if (!b) return fail('도서를 찾을 수 없습니다.')
-    if (data.reg_no && db.books.some((x) => x.reg_no === data.reg_no && x.id !== b.id)) return fail('이미 사용 중인 등록번호입니다.')
+    if (data.reg_no != null) {
+      data = { ...data, reg_no: normalizeRegNo(data.reg_no) }
+      if (parseRegNo(data.reg_no) == null) return fail('등록번호 형식이 올바르지 않습니다. (예: EM00005724)')
+      if (db.books.some((x) => x.reg_no === data.reg_no && x.id !== b.id)) return fail('이미 사용 중인 등록번호입니다.')
+    }
     Object.assign(b, data)
     b.author_mark = normalizeAuthorMark(b.author_mark)
     b.call_sort_key = callSortKey(b)
@@ -227,14 +256,20 @@ function withJoin(l) {
     ...l,
     overdue: isOverdue(l),
     book: b ? { id: b.id, reg_no: b.reg_no, title: b.title, author: b.author, class_no: b.class_no, author_mark: b.author_mark } : null,
-    member: m ? { id: m.id, name: m.name, phone: m.phone, member_no: m.member_no } : null,
+    member: m ? { id: m.id, name: m.name, phone: m.phone, member_no: m.member_no, loan_days: m.loan_days } : null,
   }
 }
 
 export const loans = {
-  async list({ page = 1, perPage = 20, keyword = '', state = '' } = {}) {
+  // dateBy: 'loaned_at'(대출일) | 'returned_at'(반납일). from/to(YYYY-MM-DD)는 그 날짜 기준, to 포함
+  async list({ page = 1, perPage = 20, keyword = '', state = '', dateBy = 'loaned_at', from = '', to = '' } = {}) {
     const kw = keyword.trim().toLowerCase()
     let rows = db.loans
+    if (from || to) {
+      const f = from ? new Date(`${from}T00:00:00`).getTime() : -Infinity
+      const t = to ? new Date(`${to}T00:00:00`).getTime() + DAY : Infinity
+      rows = rows.filter((l) => { const x = l[dateBy] && new Date(l[dateBy]).getTime(); return x && x >= f && x < t })
+    }
     if (state === 'active') rows = rows.filter((l) => !l.returned_at)
     else if (state === 'overdue') rows = rows.filter(isOverdue)
     else if (state === 'returned') rows = rows.filter((l) => l.returned_at)
@@ -296,14 +331,16 @@ export const loans = {
     }
     for (const b of targets) {
       b.status = 'loaned'
-      db.loans.push({ id: nextId.loans++, book_id: b.id, member_id: m.id, loaned_at: at, due_at: new Date(dueAt).toISOString(), returned_at: null })
+      db.loans.push({ id: nextId.loans++, book_id: b.id, member_id: m.id, loaned_at: at, due_at: new Date(dueAt).toISOString(), extended_due_at: null, returned_at: null })
     }
     return wait({ returned: returning.length, loaned: targets.length })
   },
+  // 연장: 횟수 제한 없음, 연체 중에도 가능(운영 결정). 처음 반납 예정일(due_at)은 남기고 연장 반납일만 덮어쓴다
   async extend(loanId, dueAt) {
     const l = db.loans.find((x) => x.id === loanId)
     if (!l || l.returned_at) return fail('연장할 수 없는 대출입니다.')
-    l.due_at = new Date(dueAt).toISOString()
+    if (!dueAt || dueAt < fmtDate(new Date())) return fail('연장 반납일은 오늘 이후여야 합니다.')
+    l.extended_due_at = new Date(dueAt).toISOString()
     return wait(withJoin(l))
   },
 }
