@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>작은도서관 - 회원가입</title>
+    <style>
+        label{
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        label strong{
+            width: 90px;
+        }
+    </style>
+</head>
+<body>
+    <form id="signUpForm" action="/api/signUp?key=<%= key %>" method="POST">
+        <label>
+            <strong>아이디</strong>
+            <input type="text" name="id">
+        </label>
+        <label>
+            <strong>패스워드</strong>
+            <input type="password" id="pw1" name="password">
+        </label>
+        <label>
+            <strong>패스워드 확인</strong>
+            <input type="password" id="pw2">
+        </label>
+        <label>
+            <strong>메모</strong>
+            <textarea name="memo"></textarea>
+        </label>
+    
+        <button>회원가입</button>
+    </form>
+</body>
+
+<script src="/js/signUp.js"></script>
+</html>

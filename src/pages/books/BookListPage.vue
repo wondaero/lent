@@ -2,7 +2,7 @@
 import { computed, onActivated, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { books } from '@/api'
-import { BOOK_STATUS, KDC } from '@/lib/constants'
+import { BOOK_STATUS, KDC, bookStatusText } from '@/lib/constants'
 import { fmtDate, num, callNumberLines } from '@/lib/format'
 import { parseCallQuery, hasCallTokens, classPrefix } from '@/lib/callNumber'
 import { usePagedList } from '@/lib/usePagedList'
@@ -49,7 +49,7 @@ async function exportList() {
     { header: '출판사', value: (b) => b.publisher, width: 12 },
     { header: '발행연도', value: (b) => b.pub_year, width: 8 },
     { header: 'ISBN', value: (b) => b.isbn, width: 15 },
-    { header: '상태', value: (b) => BOOK_STATUS[b.status]?.label, width: 8 },
+    { header: '상태', value: (b) => bookStatusText(b), width: 12 },
     { header: '대출자', value: (b) => b.loan?.member_name, width: 8 },
     { header: '반납예정일', value: (b) => fmtDate(b.loan?.due_at) },
     { header: '등록일', value: (b) => fmtDate(b.created_at) },
@@ -125,6 +125,7 @@ onActivated(() => { if (mounted) load() })
               <td class="ellipsis" :title="b.publisher">{{ b.publisher }}</td>
               <td class="ellipsis">
                 <span class="badge" :class="BOOK_STATUS[b.status]?.tone">{{ BOOK_STATUS[b.status]?.label }}</span>
+                <span v-if="b.status === 'hold' && b.hold_reason" class="sub">{{ b.hold_reason }}</span>
                 <span v-if="b.loan" class="sub">{{ b.loan.member_name }} · ~{{ fmtDate(b.loan.due_at) }}</span>
               </td>
               <td class="num muted">{{ fmtDate(b.created_at) }}</td>

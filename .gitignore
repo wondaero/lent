@@ -2,3 +2,10 @@ node_modules
 dist
 .env.local
 *.log
+
+# 기존 DB 덤프(회원 개인정보) — 커밋 금지
+doc/dump/
+doc/db/
+# 구 back2의 DB 접속 비밀번호·JWT 시크릿
+doc/back2/.env
+doc/back2/src/db/sql.js

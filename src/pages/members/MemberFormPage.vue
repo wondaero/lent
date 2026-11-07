@@ -13,7 +13,7 @@ const router = useRouter()
 const isEdit = computed(() => !!props.id)
 
 const form = reactive({
-  name: '', phone: '', birth: '', gender: 'M', address: '',
+  name: '', phone: '', birth_date: '', gender: 'M', address: '',
   loan_limit: 5, loan_days: 14, status: 'active', memo: '',
 })
 const meta = ref(null)
@@ -142,7 +142,7 @@ function loanState(l) {
           </label>
           <label class="field">
             <span>생년월일</span>
-            <input v-model="form.birth" class="input" type="date" />
+            <input v-model="form.birth_date" class="input" type="date" />
           </label>
           <div class="field">
             <span>성별</span>

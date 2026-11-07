@@ -2,14 +2,20 @@
 // 테이블/컬럼 구조는 Supabase(Postgres)에 만들 스키마와 동일하게 맞춘다.
 //
 // books   : id, reg_no, isbn, title, series_title, author, publisher, pub_year,
-//           class_no, author_mark, volume, copy_no, call_sort_key, status, label_printed, memo, created_at
+//           class_no, author_mark, volume, copy_no, call_sort_key, status, hold_reason, spine_label_printed, memo, created_at
+//           status: available | loaned | readonly(관내열람) | hold(대출보류, hold_reason 필수) | lost | discarded
 import { callSortKey, makeAuthorMark } from '@/lib/callNumber'
 import { fmtRegNo } from '@/lib/regNo'
-// members : id, member_no, name, phone, birth, gender, address, loan_limit, loan_days,
+// members : id, member_no(숫자, 기존 회원번호 유지 · 새 회원은 최대값 + 1), name, phone, birth_date, gender, address, loan_limit, loan_days,
 //           status, memo, created_at, deleted_at
-// loans   : id, book_id, member_id, loaned_at, due_at, extended_due_at, returned_at
+// loans   : id, book_id, book_reg_no, book_title, member_id, loaned_at, due_at, extended_due_at, returned_at
+//           book_id는 책을 삭제하면 null(ON DELETE SET NULL). book_reg_no·book_title = 대출 당시 값(삭제된 책의 기록 표시용)
 //           due_at = 대출 때 정한 반납 예정일(변경 안 함), extended_due_at = 마지막 연장 반납일(없으면 null)
-// settings: key, value — barcode_last_no = 마지막으로 출력한 바코드 라벨 번호(등록번호 숫자 부분)
+// posts   : id, category(notice|activity), title, body(일반 텍스트), pinned, status(published|draft),
+//           published_at(처음 게시한 시각), created_at, updated_at
+// post_images: id, post_id, path, thumb_path, width, height, sort
+//           실제 파일은 Supabase Storage 공개 버킷. 목업은 url/thumb_url에 바로 표시할 주소를 둔다
+// settings: key, value — barcode_last_issued_no = 마지막으로 출력한 바코드 라벨 번호(등록번호 숫자 부분)
 
 let seed = 20240123
 function rand() {
@@ -73,8 +79,9 @@ function build() {
       author_mark: makeAuthorMark({ author, title: volume ? `${title} ${volume}` : title, seriesTitle: volume ? title : '' }).mark || '',
       volume,
       copy_no: rand() < 0.1 ? String(int(2, 3)) : '',
-      status: rand() < 0.015 ? 'lost' : rand() < 0.015 ? 'repair' : 'available',
-      label_printed: rand() > 0.06,
+      ...(rand() < 0.015 ? { status: 'lost' } : rand() < 0.02 ? { status: 'hold', hold_reason: pick(['파손', '수리 중', '내용 검토']) }
+        : rand() < 0.005 ? { status: 'readonly' } : { status: 'available' }),
+      spine_label_printed: rand() > 0.06,
       memo: '',
       created_at: iso(now - (BOOK_COUNT - i) * DAY * 0.6 - int(0, DAY)),
     })
@@ -86,10 +93,10 @@ function build() {
   for (let i = 1; i <= MEMBER_COUNT; i++) {
     members.push({
       id: i,
-      member_no: `M${String(i).padStart(5, '0')}`,
+      member_no: i,
       name: pick(LAST) + pick(FIRST),
       phone: `010-${int(1000, 9999)}-${int(1000, 9999)}`,
-      birth: `${int(1950, 2018)}-${String(int(1, 12)).padStart(2, '0')}-${String(int(1, 28)).padStart(2, '0')}`,
+      birth_date: `${int(1950, 2018)}-${String(int(1, 12)).padStart(2, '0')}-${String(int(1, 28)).padStart(2, '0')}`,
       gender: rand() < 0.5 ? 'M' : 'F',
       address: `행복시 ${pick(ROADS)} ${int(1, 300)}`,
       loan_limit: pick([5, 5, 5, 7, 10]),
@@ -129,6 +136,8 @@ function build() {
       loans.push({
         id: loanId++,
         book_id: book.id,
+        book_reg_no: book.reg_no,
+        book_title: book.title,
         member_id: member.id,
         loaned_at: iso(loanedAt),
         due_at: iso(dueAt),
@@ -139,7 +148,56 @@ function build() {
   }
 
   // 기존 도서 번호까지는 바코드 라벨이 출력된 상태로 시작
-  return { books, members, loans, settings: { barcode_last_no: BOOK_COUNT } }
+  const { posts, post_images } = buildPosts()
+
+  return { books, members, loans, posts, post_images, settings: { barcode_last_issued_no: BOOK_COUNT } }
+}
+
+// 게시판 예시 글. 사진은 색 블록 SVG(실제 사진 대신)
+function buildPosts() {
+  const NOTICES = [
+    ['12월 휴관일 안내', '12월 25일(목) 성탄절과 12월 31일(수) 자료 정리일은 휴관합니다.\n반납은 출입문 옆 반납함을 이용해 주세요.', true],
+    ['겨울방학 독서교실 참가자 모집', '대상: 초등 1~4학년\n기간: 1월 6일 ~ 1월 17일 (화·목 오후 2시)\n신청: 도서관 카운터 또는 전화', true],
+    ['신간 도서 입고 안내', '11월 신간 42권이 들어왔습니다. 신간 서가에서 확인하세요.', false],
+    ['도서 기증 받습니다', '출간 5년 이내, 깨끗한 책을 받습니다.\n전집·학습지·잡지는 받지 않습니다.', false],
+    ['주말 반납함 이용 안내', '토요일 오후와 일요일에는 반납함에 넣어 주세요.\n월요일에 반납 처리되며 넣은 날 기준으로 처리됩니다.', false],
+    ['대출 권수 변경 안내', '12월부터 1인 대출 권수가 5권에서 7권으로 늘어납니다.', false],
+    ['설 연휴 휴관 안내', '(작성 중)', false],
+  ]
+  const ACTIVITIES = [
+    ['그림책 읽어주기 - 11월', '토요일 오전, 자원봉사 선생님과 그림책 세 권을 함께 읽었습니다.', 4],
+    ['가족 독서 골든벨', '12가족이 참가했습니다. 우승 가족에게는 도서상품권을 드렸어요.', 6],
+    ['작가와의 만남', '동화작가 선생님을 모시고 이야기를 나눴습니다.', 3],
+    ['여름 독서교실', '2주 동안 매일 한 권씩 읽고 독후 활동을 했습니다.', 8],
+    ['책갈피 만들기', '말린 꽃으로 나만의 책갈피를 만들었습니다.', 2],
+    ['도서관 탐험대', '청구기호로 책 찾기 놀이를 했어요.', 0],
+  ]
+  const photo = (hue, w, h, label) => 'data:image/svg+xml,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="100%" height="100%" fill="hsl(${hue} 28% 76%)"/><text x="50%" y="50%" font-size="${Math.round(w / 10)}" text-anchor="middle" dominant-baseline="middle" fill="hsl(${hue} 25% 32%)" font-family="sans-serif">${label}</text></svg>`)
+
+  const posts = []
+  const post_images = []
+  let id = 1
+  NOTICES.forEach(([title, body, pinned], i) => {
+    const t = iso(now - (i * 9 + 2) * DAY)
+    const draft = title.includes('설 연휴')
+    posts.push({ id: id++, category: 'notice', title, body, pinned, status: draft ? 'draft' : 'published', published_at: draft ? null : t, created_at: t, updated_at: t })
+  })
+  ACTIVITIES.forEach(([title, body, count], i) => {
+    const t = iso(now - (i * 21 + 4) * DAY)
+    const postId = id++
+    posts.push({ id: postId, category: 'activity', title, body, pinned: false, status: 'published', published_at: t, created_at: t, updated_at: t })
+    for (let k = 0; k < count; k++) {
+      const portrait = k % 3 === 2
+      const [w, h] = portrait ? [960, 1280] : [1280, 960]
+      const hue = (i * 47 + k * 23) % 360
+      post_images.push({
+        id: post_images.length + 1, post_id: postId, sort: k, width: w, height: h,
+        url: photo(hue, w, h, `사진 ${k + 1}`), thumb_url: photo(hue, portrait ? 300 : 400, portrait ? 400 : 300, `사진 ${k + 1}`),
+      })
+    }
+  })
+  return { posts, post_images }
 }
 
 export const db = build()
@@ -147,6 +205,8 @@ export const nextId = {
   books: db.books.length + 1,
   members: db.members.length + 1,
   loans: db.loans.length + 1,
+  posts: db.posts.length + 1,
+  post_images: db.post_images.length + 1,
 }
 
 // 외부 서지 목록(KOLIS-NET 역할) — ISBN 조회 화면 확인용 예시. 모두 가상의 책·ISBN

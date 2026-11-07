@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { books } from '@/api'
-import { BOOK_STATUS } from '@/lib/constants'
+import { BOOK_STATUS, HOLD_REASONS } from '@/lib/constants'
 import { callNumberLines, fmtDateTime } from '@/lib/format'
 import { makeAuthorMark } from '@/lib/callNumber'
 import { fmtRegNo, normalizeRegNo, parseRegNo } from '@/lib/regNo'
@@ -15,7 +15,7 @@ const isEdit = computed(() => !!props.id)
 
 const empty = () => ({
   reg_no: '', isbn: '', title: '', series_title: '', author: '', publisher: '', pub_year: '',
-  class_no: '', author_mark: '', volume: '', copy_no: '', status: 'available', memo: '',
+  class_no: '', author_mark: '', volume: '', copy_no: '', status: 'available', hold_reason: '', memo: '',
 })
 const form = reactive(empty())
 const meta = ref(null)
@@ -48,7 +48,7 @@ onMounted(async () => {
     if (isEdit.value) {
       const b = await books.get(props.id)
       Object.keys(form).forEach((k) => (form[k] = b[k] ?? ''))
-      meta.value = { created_at: b.created_at, label_printed: b.label_printed }
+      meta.value = { created_at: b.created_at, spine_label_printed: b.spine_label_printed }
     } else {
       await newEntry()
     }
@@ -142,6 +142,7 @@ function validate() {
   if (!form.author.trim()) e.author = true
   if (!form.class_no.trim()) e.class_no = true
   if (form.pub_year && !/^\d{4}$/.test(form.pub_year)) e.pub_year = true
+  if (form.status === 'hold' && !form.hold_reason.trim()) e.hold_reason = true
   errors.value = e
   return !Object.keys(e).length
 }
@@ -279,6 +280,11 @@ const preview = computed(() => callNumberLines(form))
               <option v-for="(s, k) in BOOK_STATUS" :key="k" :value="k" :disabled="k === 'loaned'">{{ s.label }}</option>
             </select>
           </label>
+          <label v-if="form.status === 'hold'" class="field" :class="{ invalid: errors.hold_reason }">
+            <span>보류 사유<b class="req">*</b></span>
+            <input v-model="form.hold_reason" class="input" list="hold-reasons" placeholder="예: 파손" maxlength="40" />
+            <datalist id="hold-reasons"><option v-for="r in HOLD_REASONS" :key="r" :value="r" /></datalist>
+          </label>
           <label class="field span-all">
             <span>메모</span>
             <textarea v-model="form.memo" class="textarea" />
@@ -297,7 +303,7 @@ const preview = computed(() => callNumberLines(form))
           </div>
           <dl v-if="meta" class="meta">
             <dt>등록일</dt><dd class="num">{{ fmtDateTime(meta.created_at) }}</dd>
-            <dt>라벨</dt><dd>{{ meta.label_printed ? '출력 완료' : '미출력' }}</dd>
+            <dt>라벨</dt><dd>{{ meta.spine_label_printed ? '출력 완료' : '미출력' }}</dd>
           </dl>
         </div>
       </section>

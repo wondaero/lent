@@ -2,7 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { members, loans, books } from '@/api'
-import { BOOK_STATUS, MEMBER_STATUS } from '@/lib/constants'
+import { MEMBER_STATUS, bookStatusText } from '@/lib/constants'
+import { normalizeRegNo } from '@/lib/regNo'
 import { addDays, dueOf, fmtDate, lastSaturday as lastSat, overdueDays } from '@/lib/format'
 import { toast } from '@/stores/toast'
 import KdcTag from '@/components/KdcTag.vue'
@@ -81,7 +82,7 @@ async function scan() {
   const c = code.value.trim()
   code.value = ''
   if (!c) return
-  if (queue.value.some((q) => q.book.reg_no.toLowerCase() === c.toLowerCase())) return toast('이미 목록에 있는 도서입니다.', 'error')
+  if (queue.value.some((q) => q.book.reg_no === normalizeRegNo(c))) return toast('이미 목록에 있는 도서입니다.', 'error')
   try {
     const { book, loan } = await loans.lookup(c)
     if (loan) {
@@ -89,7 +90,7 @@ async function scan() {
     } else if (book.status === 'available') {
       queue.value.push({ type: 'loan', book })
     } else {
-      toast(`"${book.title}" — ${BOOK_STATUS[book.status]?.label} 상태라 처리할 수 없습니다.`, 'error')
+      toast(`"${book.title}" — ${bookStatusText(book)} 상태라 대출할 수 없습니다.`, 'error')
     }
   } catch (e) {
     toast.error(e)

@@ -43,7 +43,11 @@ watch(tab, (v) => { try { localStorage.setItem(TAB_KEY, v) } catch {} })
 .print-page .preview { overflow: auto; display: grid; gap: 18px; justify-content: safe center; padding-bottom: 24px; }
 .print-page .sheet { width: 210mm; height: 297mm; background: #fff; color: #000; box-shadow: var(--shadow); display: grid; align-content: start; overflow: hidden; }
 .print-page .label { outline: 1px dashed #c8c8c8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .1em; line-height: 1.15; font-weight: 700; font-family: 'Malgun Gothic', sans-serif; overflow: hidden; }
-.print-page .label.blank { background: repeating-linear-gradient(45deg, #fafafa, #fafafa 4px, #f0f0f0 4px, #f0f0f0 8px); }
+.print-page .label.used { background: repeating-linear-gradient(45deg, #fafafa, #fafafa 4px, #f0f0f0 4px, #f0f0f0 8px); }
+/* 첫 장의 칸을 누르면 그 칸부터 인쇄(쓰다 남은 라벨지). 화면에서만 표시 */
+.print-page .label.pick { cursor: pointer; }
+.print-page .label.pick:hover { background: color-mix(in srgb, var(--brand) 12%, #fff); }
+.print-page .label.start { outline: 2px solid var(--brand); outline-offset: -2px; }
 .print-page .reg { font-size: .65em; font-weight: 400; margin-top: .2em; }
 
 @media (max-width: 1100px) {
@@ -59,6 +63,6 @@ watch(tab, (v) => { try { localStorage.setItem(TAB_KEY, v) } catch {} })
   .print-page .preview { display: block; padding: 0; overflow: visible; }
   .print-page .sheet { box-shadow: none; break-after: page; }
   .print-page .label { outline: none; }
-  .print-page .label.blank { background: none; }
+  .print-page .label.used, .print-page .label.pick:hover { background: none; }
 }
 </style>

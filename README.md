@@ -22,7 +22,26 @@ src/
 supabase/functions/
   isbn-lookup/      Edge Function: ISBN 서지 조회(KOLIS-NET 프록시)
   _shared/kolis.ts  KOLIS-NET 호출·응답 해석(순수 코드, Node에서도 테스트 가능)
+supabase/migrations/ DB 스키마(테이블·RLS·RPC·Storage)
+scripts/legacy-import.mjs  옛 DB CSV 덤프 → 새 스키마 SQL (doc/migration.md)
 ```
+
+## DB 스키마 적용 · 옛 데이터 이관
+
+```bash
+# CLI는 v3 사용(config.toml이 v3 형식이라 v2는 읽지 못함). 운영 DB에 쓰는 명령은 --yes가 있어야 실행됨
+npx supabase@latest login                                              # lent 프로젝트 소유 계정으로 (컴퓨터마다 1회)
+npx supabase@latest link --project-ref gxmgjdfnncaihqbxowgq
+npx supabase@latest db query --remote --yes -f supabase/migrations/<파일>.sql   # 스키마 적용
+npx supabase@latest migration repair <버전> --status applied --remote --yes   # 적용 기록 남기기
+npm run legacy:import                                                  # doc/db/*.csv → doc/db/out/parts/*.sql + report.md
+for f in doc/db/out/parts/*.sql; do npx supabase@latest db query --remote --yes -f "$f" || break; done   # 데이터 넣기(순서대로)
+```
+
+- 2026-11-07: 초기 스키마 `20261107120000` 적용, 옛 데이터 이관 완료(회원 181 / 도서 8,897 / 대출 기록 3,702).
+
+- 직원 계정: 대시보드 Authentication에서 사용자 추가 → `insert into staff (user_id, name) select id, '이름' from auth.users where email = '...';`
+- **Authentication 설정에서 "Allow new users to sign up"을 끈다.** (켜져 있어도 staff가 아니면 데이터는 안 보이지만, 계정이 생기는 것 자체를 막는다)
 
 ## ISBN 서지 조회 연동 (Supabase Edge Function)
 

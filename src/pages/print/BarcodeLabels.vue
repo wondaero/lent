@@ -7,13 +7,13 @@ import { onBeforeRouteLeave } from 'vue-router'
 import { books } from '@/api'
 import { LIBRARY_NAME } from '@/lib/constants'
 import { fmtRegNo, parseRegNo } from '@/lib/regNo'
-import { useLabelSheet } from '@/lib/useLabelSheet'
+import { useLabelSheet, USED, FREE } from '@/lib/useLabelSheet'
 import { toast } from '@/stores/toast'
 import Barcode from '@/components/Barcode.vue'
 import LabelSheetFields from './LabelSheetFields.vue'
 import PrintCheckDialog from './PrintCheckDialog.vue'
 
-const { s, reset, perPage, paginate, sheetStyle } = useLabelSheet('lent.barcodeLabelSettings', {
+const { s, reset, perPage, skip, paginate, startAt, sheetStyle } = useLabelSheet('lent.barcodeLabelSettings', {
   showLibrary: true,
   cols: 3,
   width: 64,          // mm
@@ -23,7 +23,6 @@ const { s, reset, perPage, paginate, sheetStyle } = useLabelSheet('lent.barcodeL
   top: 8,
   left: 5,
   fontSize: 10,       // pt
-  skip: 0,
 })
 
 const MAX = 500
@@ -38,7 +37,7 @@ async function loadState() {
 }
 onMounted(loadState)
 // 기본 장수 = 라벨지 한 장(건너뛸 칸 제외)
-watch([perPage, () => s.skip], () => { count.value = Math.max(1, perPage.value - Math.min(s.skip, perPage.value - 1)) }, { immediate: true })
+watch([perPage, skip], () => { count.value = perPage.value - skip.value }, { immediate: true })
 
 // "EM00000010" 또는 숫자만 입력해도 됨
 const toNo = (v) => (/^\d+$/.test(String(v).trim()) ? Number(v) : parseRegNo(v))
@@ -154,7 +153,12 @@ onBeforeRouteLeave(() => {
 
     <div class="preview">
       <div v-for="(cells, pi) in pages" :key="pi" class="sheet" :style="sheetStyle">
-        <div v-for="(code, ci) in cells" :key="ci" class="label barcode-label" :class="{ blank: !code }">
+        <div
+          v-for="(code, ci) in cells" :key="ci" class="label barcode-label"
+          :class="{ used: code === USED, free: code === FREE, pick: pi === 0 && !printing, start: pi === 0 && ci === skip }"
+          :title="pi === 0 && !printing ? '이 칸부터 인쇄' : undefined"
+          @click="!printing && startAt(pi, ci)"
+        >
           <template v-if="code">
             <div v-if="s.showLibrary" class="lib">{{ LIBRARY_NAME }}</div>
             <Barcode :value="code" class="bars" :style="{ height: `${s.height * 0.42}mm` }" />

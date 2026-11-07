@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>작은도서관 - 로그인</title>
+    <style>
+        label{
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        label strong{
+            width: 80px;
+        }
+    </style>
+</head>
+<body>
+    <h1>그루터기 작은 도서관 로그인</h1>
+    <form id="signInForm" action="/api/signIn" method="POST">
+        <label>
+            <strong>아이디</strong>
+            <input type="text" name="id" id="idInput" />
+        </label>
+        <label>
+            <strong>패스워드</strong>
+            <input type="password" name="password" pw="passwordInput" />
+        </label>
+        <button>로그인</button>
+    </form>
+</body>
+
+<script src="/js/signIn.js"></script>
+</html>

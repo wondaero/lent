@@ -16,6 +16,7 @@ const nav = [
   { to: '/books', label: '도서', icon: ICONS.book },
   { to: '/members', label: '회원', icon: ICONS.member },
   { to: '/loans', label: '대출 기록', icon: ICONS.history },
+  { to: '/posts', label: '게시판', icon: ICONS.board },
   { to: '/print', label: '라벨 출력', icon: ICONS.print },
   { to: '/settings', label: '설정', icon: ICONS.settings },
 ]
@@ -59,7 +60,7 @@ async function onLogout() {
       <main class="content">
         <!-- 목록 페이지는 캐시해서 상세 → 목록 복귀 시 검색조건/페이지 유지 -->
         <router-view v-slot="{ Component }">
-          <keep-alive :include="['BookListPage', 'MemberListPage', 'LoanListPage']">
+          <keep-alive :include="['BookListPage', 'MemberListPage', 'LoanListPage', 'PostListPage']">
             <component :is="Component" :key="route.path" />
           </keep-alive>
         </router-view>

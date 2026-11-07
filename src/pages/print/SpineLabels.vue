@@ -4,12 +4,12 @@ import { computed, nextTick, onMounted, ref, shallowRef } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { books } from '@/api'
 import { callNumberLines } from '@/lib/format'
-import { useLabelSheet } from '@/lib/useLabelSheet'
+import { useLabelSheet, USED, FREE } from '@/lib/useLabelSheet'
 import { toast } from '@/stores/toast'
 import LabelSheetFields from './LabelSheetFields.vue'
 import PrintCheckDialog from './PrintCheckDialog.vue'
 
-const { s, reset, perPage, paginate, sheetStyle } = useLabelSheet('lent.labelSettings', {
+const { s, reset, perPage, skip, paginate, startAt, sheetStyle } = useLabelSheet('lent.labelSettings', {
   type: 'call',       // call: 청구기호 전체 | class: 분류기호 | author: 저자기호
   showRegNo: false,
   cols: 5,
@@ -20,7 +20,6 @@ const { s, reset, perPage, paginate, sheetStyle } = useLabelSheet('lent.labelSet
   top: 10,
   left: 8,
   fontSize: 12,       // pt
-  skip: 0,            // 이미 사용한 라벨 칸 수(낱장 재사용)
 })
 
 const candidates = shallowRef([])
@@ -74,7 +73,7 @@ const labels = computed(() => printing.value?.books ?? selectedBooks.value)
 const pages = computed(() => paginate(labels.value))
 // 모아서 출력하기: 마지막 장에 남는 칸 수(라벨지 낭비 판단용)
 const emptyCells = computed(() => {
-  const used = (Math.min(s.skip, perPage.value - 1) + labels.value.length) % perPage.value
+  const used = (skip.value + labels.value.length) % perPage.value
   return used ? perPage.value - used : 0
 })
 
@@ -161,7 +160,12 @@ onBeforeRouteLeave(() => {
 
     <div class="preview">
       <div v-for="(cells, pi) in pages" :key="pi" class="sheet" :style="sheetStyle">
-        <div v-for="(b, ci) in cells" :key="ci" class="label" :class="{ blank: !b }">
+        <div
+          v-for="(b, ci) in cells" :key="ci" class="label"
+          :class="{ used: b === USED, free: b === FREE, pick: pi === 0 && !printing, start: pi === 0 && ci === skip }"
+          :title="pi === 0 && !printing ? '이 칸부터 인쇄' : undefined"
+          @click="!printing && startAt(pi, ci)"
+        >
           <template v-if="b">
             <div v-for="(line, li) in linesOf(b)" :key="li" class="line">{{ line }}</div>
             <div v-if="s.showRegNo" class="reg">{{ b.reg_no }}</div>

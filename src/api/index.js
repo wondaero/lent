@@ -5,6 +5,7 @@ import { db, nextId, CATALOG } from './mockDb'
 import { parseCallQuery, hasCallTokens, matchCall, callSortKey, normalizeAuthorMark } from '@/lib/callNumber'
 import { fmtDate, dueOf } from '@/lib/format'
 import { fmtRegNo, normalizeRegNo, parseRegNo } from '@/lib/regNo'
+import { POST_CATEGORY, POST_PHOTO } from '@/lib/constants'
 
 // Supabase 연결 정보(.env.local). 없으면 목업으로 동작
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -48,7 +49,7 @@ const bookById = (id) => db.books.find((b) => b.id === +id)
 const memberById = (id) => db.members.find((m) => m.id === +id)
 
 function lastBarcodeNo() {
-  return db.books.reduce((m, b) => Math.max(m, parseRegNo(b.reg_no) ?? 0), db.settings.barcode_last_no)
+  return db.books.reduce((m, b) => Math.max(m, parseRegNo(b.reg_no) ?? 0), db.settings.barcode_last_issued_no)
 }
 
 function activeLoanOf(bookId) {
@@ -60,13 +61,15 @@ export const books = {
   // keyword는 청구기호 요소를 패턴으로 분리하고 나머지는 일반 키워드로 검색.
   // Supabase: class_no LIKE 'prefix%' AND author_mark ILIKE 'mark%' ... ORDER BY call_sort_key
   async list({ page = 1, perPage = 20, keyword = '', status = '', label = '', category = '', sort = 'recent' } = {}) {
-    const q = parseCallQuery(keyword)
+    // 등록번호는 한글 자판으로 찍힌 값("뜨00004055")도 찾는다. 청구기호 해석 전에 변환해야 저자기호로 오인하지 않음
+    const asReg = normalizeRegNo(keyword)
+    const q = parseCallQuery(parseRegNo(asReg) != null ? asReg : keyword)
     const kw = q.rest.toLowerCase()
     let rows = db.books
     if (hasCallTokens(q)) rows = rows.filter((b) => matchCall(b, q))
     if (kw) rows = rows.filter((b) => b.reg_no.toLowerCase() === kw || has(b.title, kw) || has(b.series_title, kw) || has(b.author, kw) || has(b.publisher, kw) || has(b.isbn, kw))
     if (status) rows = rows.filter((b) => b.status === status)
-    if (label === 'unprinted') rows = rows.filter((b) => !b.label_printed)
+    if (label === 'unprinted') rows = rows.filter((b) => !b.spine_label_printed)
     if (category !== '') rows = rows.filter((b) => b.class_no[0] === String(category))
     const cmp = {
       recent: (a, b) => b.id - a.id,
@@ -86,7 +89,8 @@ export const books = {
     return b ? wait(b) : fail('도서를 찾을 수 없습니다.')
   },
   async getByRegNo(regNo) {
-    const b = db.books.find((x) => x.reg_no.toLowerCase() === regNo.trim().toLowerCase())
+    const reg = normalizeRegNo(regNo)
+    const b = db.books.find((x) => x.reg_no === reg)
     return b ? wait(b) : fail(`등록번호 "${regNo}" 도서를 찾을 수 없습니다.`)
   },
   // 바코드 라벨 출력 상태. 출력 기록보다 큰 번호로 등록된 책이 있으면 그 다음부터(라벨 번호 겹침 방지)
@@ -95,26 +99,28 @@ export const books = {
     return wait({ lastIssued: last, next: fmtRegNo(last + 1) })
   },
   // 바코드 라벨 출력 완료 표시: from(숫자)부터 count장. 그 사이 다른 PC에서 먼저 출력했으면 실패.
-  // Supabase: settings 행을 잠그고 "barcode_last_no = from - 1"일 때만 갱신하는 RPC
+  // Supabase: settings 행을 잠그고 "barcode_last_issued_no = from - 1"일 때만 갱신하는 RPC
   async issueBarcodes(from, count) {
     if (from !== lastBarcodeNo() + 1) return fail('그 사이 다른 곳에서 바코드를 출력했습니다. 화면을 새로고침한 뒤 다시 확인해주세요.')
-    db.settings.barcode_last_no = from + count - 1
-    return wait({ lastIssued: db.settings.barcode_last_no, next: fmtRegNo(db.settings.barcode_last_no + 1) })
+    db.settings.barcode_last_issued_no = from + count - 1
+    return wait({ lastIssued: db.settings.barcode_last_issued_no, next: fmtRegNo(db.settings.barcode_last_issued_no + 1) })
   },
   // 인쇄를 취소했을 때 번호 되돌리기. 그 뒤로 더 출력됐거나 그 번호로 등록된 책이 있으면 되돌리지 않는다
   // (번호가 비는 건 괜찮지만 겹치면 안 됨). Supabase: issueBarcodes와 같은 조건부 갱신 RPC
   async releaseBarcodes(from, count) {
     const last = from + count - 1
     const used = db.books.some((b) => { const n = parseRegNo(b.reg_no); return n != null && n >= from })
-    if (db.settings.barcode_last_no !== last || used) return fail(`이미 다음 번호가 사용되어 되돌리지 않았습니다. ${fmtRegNo(from)} ~ ${fmtRegNo(last)}은(는) 건너뜁니다.`)
-    db.settings.barcode_last_no = from - 1
+    if (db.settings.barcode_last_issued_no !== last || used) return fail(`이미 다음 번호가 사용되어 되돌리지 않았습니다. ${fmtRegNo(from)} ~ ${fmtRegNo(last)}은(는) 건너뜁니다.`)
+    db.settings.barcode_last_issued_no = from - 1
     return wait({ lastIssued: from - 1, next: fmtRegNo(from) })
   },
   async create(data) {
     const reg = normalizeRegNo(data.reg_no)
     if (parseRegNo(reg) == null) return fail('등록번호 형식이 올바르지 않습니다. (예: EM00005724)')
     if (db.books.some((b) => b.reg_no === reg)) return fail('이미 사용 중인 등록번호입니다.')
-    const row = { ...data, reg_no: reg, id: nextId.books++, status: data.status || 'available', label_printed: false, created_at: nowIso() }
+    data = { ...data, hold_reason: data.status === 'hold' ? (data.hold_reason || '').trim() : '' }
+    if (data.status === 'hold' && !data.hold_reason) return fail('대출보류 사유를 입력해주세요.')
+    const row = { ...data, reg_no: reg, id: nextId.books++, status: data.status || 'available', spine_label_printed: false, created_at: nowIso() }
     row.author_mark = normalizeAuthorMark(row.author_mark)
     row.call_sort_key = callSortKey(row)
     db.books.push(row)
@@ -127,6 +133,10 @@ export const books = {
       data = { ...data, reg_no: normalizeRegNo(data.reg_no) }
       if (parseRegNo(data.reg_no) == null) return fail('등록번호 형식이 올바르지 않습니다. (예: EM00005724)')
       if (db.books.some((x) => x.reg_no === data.reg_no && x.id !== b.id)) return fail('이미 사용 중인 등록번호입니다.')
+    }
+    if (data.status != null) {
+      data = { ...data, hold_reason: data.status === 'hold' ? (data.hold_reason || '').trim() : '' }
+      if (data.status === 'hold' && !data.hold_reason) return fail('대출보류 사유를 입력해주세요.')
     }
     Object.assign(b, data)
     b.author_mark = normalizeAuthorMark(b.author_mark)
@@ -182,7 +192,7 @@ export const books = {
   },
   async markLabelPrinted(ids) {
     const set = new Set(ids)
-    db.books.forEach((b) => { if (set.has(b.id)) b.label_printed = true })
+    db.books.forEach((b) => { if (set.has(b.id)) b.spine_label_printed = true })
     return wait(true)
   },
   async byIds(ids) {
@@ -218,7 +228,7 @@ export const members = {
     const kw = keyword.trim().toLowerCase()
     if (!kw) return wait([])
     const rows = db.members
-      .filter((m) => !m.deleted_at && (has(m.name, kw) || has(m.phone, kw) || m.member_no.toLowerCase() === kw))
+      .filter((m) => !m.deleted_at && (has(m.name, kw) || has(m.phone, kw) || String(m.member_no) === kw))
       .slice(0, 30)
       .map((m) => ({ ...m, ...memberStats(m.id) }))
     return wait(rows)
@@ -229,7 +239,9 @@ export const members = {
   },
   async create(data) {
     const id = nextId.members++
-    const row = { ...data, id, member_no: `M${String(id).padStart(5, '0')}`, created_at: nowIso(), deleted_at: null }
+    // 회원번호 = 지금까지의 최대 번호 + 1(삭제된 회원 번호도 다시 쓰지 않음 → 회원카드 번호 겹침 방지)
+    const memberNo = db.members.reduce((mx, m) => Math.max(mx, m.member_no), 0) + 1
+    const row = { ...data, id, member_no: memberNo, created_at: nowIso(), deleted_at: null }
     db.members.push(row)
     return wait(row)
   },
@@ -255,7 +267,9 @@ function withJoin(l) {
   return {
     ...l,
     overdue: isOverdue(l),
-    book: b ? { id: b.id, reg_no: b.reg_no, title: b.title, author: b.author, class_no: b.class_no, author_mark: b.author_mark } : null,
+    // 책이 삭제됐으면 대출 때 저장해 둔 등록번호·서명으로 보여준다(대출 기록은 지우지 않음)
+    book: b ? { id: b.id, reg_no: b.reg_no, title: b.title, author: b.author, class_no: b.class_no, author_mark: b.author_mark }
+      : { id: null, deleted: true, reg_no: l.book_reg_no, title: l.book_title ? `${l.book_title} (삭제된 도서)` : '(삭제된 도서)', author: '', class_no: '', author_mark: '' },
     member: m ? { id: m.id, name: m.name, phone: m.phone, member_no: m.member_no, loan_days: m.loan_days } : null,
   }
 }
@@ -274,7 +288,7 @@ export const loans = {
     else if (state === 'overdue') rows = rows.filter(isOverdue)
     else if (state === 'returned') rows = rows.filter((l) => l.returned_at)
     rows = rows.map(withJoin)
-    if (kw) rows = rows.filter((l) => has(l.book?.title, kw) || l.book?.reg_no.toLowerCase() === kw || has(l.member?.name, kw))
+    if (kw) rows = rows.filter((l) => has(l.book?.title, kw) || l.book?.reg_no?.toLowerCase() === kw || has(l.member?.name, kw))
     rows.sort((a, b) => b.id - a.id)
     return wait(paginate(rows, page, perPage))
   },
@@ -293,7 +307,8 @@ export const loans = {
   },
   // 스캔한 등록번호의 도서 + 현재 대출 정보(없으면 null) → 화면에서 대출/반납 자동 판별
   async lookup(regNo) {
-    const b = db.books.find((x) => x.reg_no.toLowerCase() === regNo.trim().toLowerCase())
+    const reg = normalizeRegNo(regNo)
+    const b = db.books.find((x) => x.reg_no === reg)
     if (!b) return fail(`등록번호 "${regNo}" 도서를 찾을 수 없습니다.`)
     const l = activeLoanOf(b.id)
     return wait({ book: b, loan: l ? withJoin(l) : null })
@@ -331,7 +346,7 @@ export const loans = {
     }
     for (const b of targets) {
       b.status = 'loaned'
-      db.loans.push({ id: nextId.loans++, book_id: b.id, member_id: m.id, loaned_at: at, due_at: new Date(dueAt).toISOString(), extended_due_at: null, returned_at: null })
+      db.loans.push({ id: nextId.loans++, book_id: b.id, book_reg_no: b.reg_no, book_title: b.title, member_id: m.id, loaned_at: at, due_at: new Date(dueAt).toISOString(), extended_due_at: null, returned_at: null })
     }
     return wait({ returned: returning.length, loaned: targets.length })
   },
@@ -354,7 +369,7 @@ export const stats = {
     for (const b of db.books) {
       category[+b.class_no[0]]++
       if (b.status === 'loaned') loaned++
-      if (!b.label_printed) unprinted++
+      if (!b.spine_label_printed) unprinted++
     }
     let overdue = 0, todayLoans = 0, todayReturns = 0
     for (const l of db.loans) {
@@ -413,5 +428,96 @@ export const stats = {
       }
     }
     return wait({ labels: buckets.map((b) => b.label), loans: loanCnt, returns: returnCnt })
+  },
+}
+
+/* ───────────── 게시판 ───────────── */
+// 사진 배열(images)은 화면에 보이는 순서 그대로 넘긴다.
+//   기존 사진 = { id }, 새 사진 = { blob, thumbBlob, width, height } (이미 브라우저에서 줄인 것)
+// Supabase: 새 사진은 Storage 공개 버킷에 올리고 post_images에 경로를 저장, 빠진 사진은 파일까지 삭제.
+//   메인페이지용 공개 조회는 별도(게시된 글만, CLAUDE.md §10)
+const postById = (id) => db.posts.find((p) => p.id === +id)
+const imagesOf = (postId) => db.post_images.filter((i) => i.post_id === postId).sort((a, b) => a.sort - b.sort)
+
+function savePostImages(postId, images = []) {
+  const keep = new Set(images.filter((i) => i.id).map((i) => i.id))
+  db.post_images = db.post_images.filter((i) => {
+    if (i.post_id !== postId || keep.has(i.id)) return true
+    if (i.url.startsWith('blob:')) { URL.revokeObjectURL(i.url); URL.revokeObjectURL(i.thumb_url) }
+    return false
+  })
+  images.forEach((img, sort) => {
+    if (img.id) {
+      const row = db.post_images.find((i) => i.id === img.id)
+      if (row) row.sort = sort
+    } else {
+      db.post_images.push({
+        id: nextId.post_images++, post_id: postId, sort, width: img.width, height: img.height,
+        url: URL.createObjectURL(img.blob), thumb_url: URL.createObjectURL(img.thumbBlob),
+      })
+    }
+  })
+}
+
+function checkPost(data) {
+  if (!POST_CATEGORY[data.category]) return '분류를 선택해주세요.'
+  if (!data.title?.trim()) return '제목을 입력해주세요.'
+  if (data.images?.length && !POST_CATEGORY[data.category].photos) return `${POST_CATEGORY[data.category].label}에는 사진을 올릴 수 없습니다.`
+  if ((data.images?.length || 0) > POST_PHOTO.maxCount) return `사진은 ${POST_PHOTO.maxCount}장까지 올릴 수 있습니다.`
+  return ''
+}
+
+export const posts = {
+  // 목록에는 본문을 싣지 않는다(가볍게). 고정 글이 먼저, 그다음 최신순
+  async list({ page = 1, perPage = 20, category = 'notice', keyword = '', status = '' } = {}) {
+    const kw = keyword.trim().toLowerCase()
+    let rows = db.posts.filter((p) => p.category === category)
+    if (kw) rows = rows.filter((p) => has(p.title, kw) || has(p.body, kw))
+    if (status) rows = rows.filter((p) => p.status === status)
+    rows = rows
+      .sort((a, b) => b.pinned - a.pinned || (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : b.id - a.id))
+      .map(({ body, ...p }) => {
+        const imgs = imagesOf(p.id)
+        return { ...p, image_count: imgs.length, thumb_url: imgs[0]?.thumb_url ?? null }
+      })
+    return wait(paginate(rows, page, perPage))
+  },
+  async get(id) {
+    const p = postById(id)
+    return p ? wait({ ...p, images: imagesOf(p.id) }) : fail('글을 찾을 수 없습니다.')
+  },
+  async create({ images = [], ...data }) {
+    const err = checkPost({ ...data, images })
+    if (err) return fail(err)
+    const t = nowIso()
+    const row = {
+      id: nextId.posts++, category: data.category, title: data.title.trim(), body: data.body || '',
+      pinned: !!data.pinned, status: data.status || 'published',
+      published_at: data.status === 'draft' ? null : t, created_at: t, updated_at: t,
+    }
+    db.posts.push(row)
+    savePostImages(row.id, images)
+    return wait({ ...row, images: imagesOf(row.id) })
+  },
+  async update(id, { images = [], ...data }) {
+    const p = postById(id)
+    if (!p) return fail('글을 찾을 수 없습니다.')
+    const err = checkPost({ ...p, ...data, images })
+    if (err) return fail(err)
+    const t = nowIso()
+    Object.assign(p, {
+      title: data.title.trim(), body: data.body || '', pinned: !!data.pinned, status: data.status,
+      // 처음 게시한 시각은 유지(임시저장 → 게시로 바꿀 때만 기록)
+      published_at: p.published_at || (data.status === 'published' ? t : null), updated_at: t,
+    })
+    savePostImages(p.id, images)
+    return wait({ ...p, images: imagesOf(p.id) })
+  },
+  async remove(id) {
+    const p = postById(id)
+    if (!p) return fail('글을 찾을 수 없습니다.')
+    savePostImages(p.id, [])
+    db.posts = db.posts.filter((x) => x.id !== p.id)
+    return wait(true)
   },
 }
