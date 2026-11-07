@@ -2,6 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { login } from '@/stores/auth'
+import { auth } from '@/api'
 import { LIBRARY_NAME } from '@/lib/constants'
 
 const route = useRoute()
@@ -43,7 +44,7 @@ async function submit() {
       </label>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <button class="btn primary lg" type="submit" :disabled="busy">{{ busy ? '로그인 중…' : '로그인' }}</button>
-      <p class="hint muted">데모 계정: admin@lib.local / admin1234</p>
+      <p v-if="auth.isDemo" class="hint muted">데모 계정: admin@lib.local / admin1234</p>
     </form>
   </div>
 </template>

@@ -23,6 +23,7 @@
   - 목록 페이지는 keep-alive 캐시(상세 → 목록 복귀 시 검색조건 유지). 새 목록 페이지는 `defineOptions({ name })` 후 `AdminLayout.vue`의 include에 추가.
 - 새 의존성은 꼭 필요할 때만 추가하고 이유를 남긴다.
   - `write-excel-file`: 엑셀 내보내기. CSV는 엑셀에서 ISBN이 지수로 바뀌어 .xlsx가 필요. 내보낼 때만 동적 import.
+  - `@supabase/supabase-js`: 로그인(JWT 자동 갱신·세션 복원)과 DB 호출. Supabase 모드에서만 동적 import.
 
 ## 3. 데이터 레이어 (Supabase 전환 대비)
 
@@ -33,6 +34,10 @@
   - **컬럼 이름은 뜻이 바로 보이게**(옛 `mbr_nm`·`book_cde` 같은 줄임말 금지, 사용자 결정). 모든 컬럼에 한국어 `comment on column`을 단다. 헷갈리던 이름은 바꿨다: `label_printed` → `spine_label_printed`(라벨이 두 종류), `birth` → `birth_date`, `barcode_last_no` → `barcode_last_issued_no`.
   - **권한:** `staff`에 있는 로그인 계정만 데이터 접근(`is_staff()`). 회원가입이 실수로 열려 있어도 개인정보가 새지 않게 하려는 것. anon(공개 키)은 아무 권한 없음. 직원 추가 = Auth에서 계정 생성 후 `staff`에 한 줄.
   - RPC: `loans_process`, `loans_extend`, `barcode_last_issued`, `barcode_issue`, `barcode_release`.
+- **관리자 로그인 = Supabase Auth(JWT)** (`src/api/supabase.js`, `auth` in `api/index.js`). 도서관 회원은 로그인하지 않는다.
+  - **공용 관리자 계정 1개**, 그만둔 사람이 있어도 비밀번호를 바꾸지 않음(사용자 결정). **동시 로그인 허용, 자동 로그아웃 없음**(사용자 결정) → 세션 제한 기능을 만들지 않는다.
+  - 로그인한 계정이 `staff`에 없으면 로그인 단계에서 막는다. 토큰 갱신이 실패하면 "로그인이 만료되었습니다" 후 로그인 화면.
+  - `.env.local`이 없으면 목업 로그인(데모 계정 `admin@lib.local` / `admin1234`). `@supabase/supabase-js`는 Supabase 모드에서만 동적 import(토큰 자동 갱신·세션 복원을 직접 만들지 않으려고 추가한 의존성).
 - 여러 테이블을 바꾸는 작업(대출/반납 `loans.process`)은 Supabase에서 **단일 RPC(트랜잭션)**로 구현한다. 목업도 "검증을 모두 끝낸 뒤 반영"해서 일부만 처리되는 일이 없게 한다.
 - **새 스키마는 지금 앱 기준으로 새로 설계한다.** 기존 MySQL/MariaDB 구조를 고쳐 쓰지 않는다(사용자 결정: 예전 구조는 개편 대상).
   - **기존 DB 이관 = [doc/migration.md](doc/migration.md)(규칙·근거) + `scripts/legacy-import.mjs`(구현, `npm run legacy:import`).** 사용자가 새 덤프를 주면 분석을 다시 하지 않고 이 절차대로 바로 진행한다. 규칙이 바뀌면 문서와 스크립트를 함께 고친다.

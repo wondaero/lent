@@ -7,9 +7,7 @@ import { fmtDate, dueOf } from '@/lib/format'
 import { fmtRegNo, normalizeRegNo, parseRegNo } from '@/lib/regNo'
 import { POST_CATEGORY, POST_PHOTO } from '@/lib/constants'
 
-// Supabase 연결 정보(.env.local). 없으면 목업으로 동작
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+import { SUPABASE_URL, SUPABASE_KEY, hasSupabase, getClient, bearer } from './supabase'
 
 const LATENCY = 80
 const DAY = 86400000
@@ -29,19 +27,56 @@ const isOverdue = (loan) => !loan.returned_at && new Date(dueOf(loan)).getTime()
 /* ───────────── 인증 ───────────── */
 const SESSION_KEY = 'lent.session'
 
+// Supabase 모드: 관리자 = Supabase Auth 계정 중 직원 명단(staff)에 있는 계정. 도서관 회원(members)은 로그인하지 않는다.
+//   직원 명단에 없으면 로그인해도 데이터가 안 보이므로(RLS) 로그인 단계에서 막는다.
+// 목업 모드: 데모 계정 admin@lib.local / admin1234
+async function staffUser(sb, user) {
+  const { data, error } = await sb.from('staff').select('name').eq('user_id', user.id).maybeSingle()
+  if (error) throw new Error('직원 정보를 확인하지 못했습니다. 네트워크를 확인해주세요.')
+  return data ? { id: user.id, email: user.email, name: data.name } : null
+}
+
 export const auth = {
-  getSession() {
-    try { return JSON.parse(localStorage.getItem(SESSION_KEY)) } catch { return null }
+  // 앱 시작 시 저장된 로그인 복원. 반환 { user } | null
+  async restore() {
+    const sb = await getClient()
+    if (!sb) { try { return JSON.parse(localStorage.getItem(SESSION_KEY)) } catch { return null } }
+    const { data } = await sb.auth.getSession()
+    if (!data.session) return null
+    try {
+      const user = await staffUser(sb, data.session.user)
+      if (!user) { await sb.auth.signOut(); return null }
+      return { user }
+    } catch {
+      // 오프라인 등으로 확인 못 하면 일단 로그인 상태 유지(데이터 접근은 어차피 DB가 토큰으로 검증)
+      return { user: { id: data.session.user.id, email: data.session.user.email, name: '관리자' } }
+    }
   },
   async signIn(email, password) {
-    if (email !== 'admin@lib.local' || password !== 'admin1234') return fail('이메일 또는 비밀번호가 올바르지 않습니다.')
-    const session = { user: { email, name: '관리자' }, at: nowIso() }
-    try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)) } catch {}
-    return wait(session)
+    const sb = await getClient()
+    if (!sb) {
+      if (email !== 'admin@lib.local' || password !== 'admin1234') return fail('이메일 또는 비밀번호가 올바르지 않습니다.')
+      const session = { user: { email, name: '관리자' }, at: nowIso() }
+      try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)) } catch {}
+      return wait(session)
+    }
+    const { data, error } = await sb.auth.signInWithPassword({ email, password })
+    if (error) throw new Error(error.status === 400 ? '이메일 또는 비밀번호가 올바르지 않습니다.' : `로그인하지 못했습니다. (${error.message})`)
+    const user = await staffUser(sb, data.user)
+    if (!user) { await sb.auth.signOut(); throw new Error('관리자로 등록되지 않은 계정입니다.') }
+    return { user }
   },
   async signOut() {
-    try { localStorage.removeItem(SESSION_KEY) } catch {}
+    const sb = await getClient()
+    if (sb) await sb.auth.signOut()
+    else try { localStorage.removeItem(SESSION_KEY) } catch {}
   },
+  // 토큰 갱신 실패·다른 탭에서 로그아웃 등으로 세션이 끝나면 알림
+  async onSignedOut(cb) {
+    const sb = await getClient()
+    sb?.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') cb() })
+  },
+  isDemo: !hasSupabase,
 }
 
 /* ───────────── 도서 ───────────── */
@@ -159,9 +194,9 @@ export const books = {
     // 개발용 예시 ISBN(가상의 책)은 설정과 무관하게 목업 사용
     const ext = CATALOG.filter((c) => c.isbn === code)
     if (ext.length) return wait(ext)
-    if (SUPABASE_URL && SUPABASE_KEY) {
+    if (hasSupabase) {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/isbn-lookup?isbn=${encodeURIComponent(code)}`, {
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${await bearer()}` },
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error || `서지 조회 실패 (${res.status})`)

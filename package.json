@@ -10,6 +10,7 @@
     "legacy:import": "node scripts/legacy-import.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.109.0",
     "chart.js": "^4.6.1",
     "vue": "^3.5.44",
     "vue-router": "^4.6.4",
