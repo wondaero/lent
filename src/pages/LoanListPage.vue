@@ -13,16 +13,18 @@ import ExportButton from '@/components/ExportButton.vue'
 defineOptions({ name: 'LoanListPage' })
 
 const router = useRouter()
-const { filters, page, rows, total, loading, perPage, load } = usePagedList(loans.list, { keyword: '', state: 'active', dateBy: 'loaned_at', from: '', to: '' })
+const { filters, page, rows, total, loading, perPage, load } = usePagedList(loans.list, { keyword: '', state: '', from: '', to: '' })
 
+// 대출 기록 = 대출 한 건이 한 줄, 대출일 최신순으로 쌓인다. 처음엔 전체(사용자 결정)
 const tabs = [
+  { v: '', label: '전체' },
   { v: 'active', label: '대출중' },
   { v: 'overdue', label: '연체' },
   { v: 'returned', label: '반납완료' },
-  { v: '', label: '전체' },
 ]
 
-// 기간 필터. 빠른 선택은 from/to를 채우고, '기간'은 날짜를 직접 고른다
+// 기간 필터는 항상 대출일 기준(반납일 기준 선택은 없앰: 반납한 책은 서명·회원 검색으로 찾는다)
+// 빠른 선택은 from/to를 채우고, '기간'은 날짜를 직접 고른다
 const periods = [['all', '전체'], ['today', '오늘'], ['week', '이번 주'], ['month', '이번 달'], ['custom', '기간']]
 const period = ref('all')
 function setPeriod(p) {
@@ -64,6 +66,8 @@ async function exportList() {
     { header: '연장 반납일', value: (l) => fmtDate(l.extended_due_at) },
     { header: '반납일', value: (l) => fmtDate(l.returned_at) },
     { header: '상태', value: (l) => stateOf(l).label, width: 14 },
+    { header: '대출 메모', value: (l) => l.loan_memo, width: 24 },
+    { header: '반납 메모', value: (l) => l.return_memo, width: 24 },
   ], all)
 }
 
@@ -83,11 +87,8 @@ onActivated(() => { if (mounted) load() })
       <router-link to="/circulation" class="btn primary">대출 / 반납</router-link>
     </div>
     <div class="toolbar">
-      <div class="seg" role="group" aria-label="기간 기준">
-        <button :class="{ on: filters.dateBy === 'loaned_at' }" @click="filters.dateBy = 'loaned_at'">대출일</button>
-        <button :class="{ on: filters.dateBy === 'returned_at' }" @click="filters.dateBy = 'returned_at'">반납일</button>
-      </div>
-      <div class="seg" role="group" aria-label="기간">
+      <span class="period-label">대출일</span>
+      <div class="seg" role="group" aria-label="대출일 기간">
         <button v-for="p in periods" :key="p[0]" :class="{ on: period === p[0] }" @click="setPeriod(p[0])">{{ p[1] }}</button>
       </div>
       <template v-if="period === 'custom'">
@@ -104,10 +105,14 @@ onActivated(() => { if (mounted) load() })
       <div v-if="loading" class="loading-bar" />
       <div class="tbl-wrap">
         <table class="tbl">
-          <thead><tr><th>도서</th><th>회원</th><th>대출일</th><th>반납예정일</th><th>반납일</th><th>상태</th><th class="act" /></tr></thead>
+          <thead><tr><th>도서</th><th class="fit">회원</th><th class="fit">대출일</th><th class="fit">반납예정일</th><th class="fit">반납일</th><th class="fit">상태</th><th class="act fit" /></tr></thead>
           <tbody>
             <tr v-for="l in rows" :key="l.id" class="clickable" @click="l.member && router.push(`/members/${l.member.id}`)">
-              <td class="title-cell">{{ l.book?.title ?? '(삭제된 도서)' }}<span class="sub num">{{ l.book?.reg_no }}</span></td>
+              <td class="title-cell">
+                {{ l.book?.title ?? '(삭제된 도서)' }}<span class="sub num">{{ l.book?.reg_no }}</span>
+                <span v-if="l.loan_memo" class="sub memo">대출 메모: {{ l.loan_memo }}</span>
+                <span v-if="l.return_memo" class="sub memo">반납 메모: {{ l.return_memo }}</span>
+              </td>
               <td class="nowrap">{{ l.member?.name ?? '-' }}<span class="sub num">{{ l.member?.phone }}</span></td>
               <td class="nowrap num">{{ fmtDate(l.loaned_at) }}</td>
               <td class="nowrap num">{{ fmtDate(dueOf(l)) }}<span v-if="l.extended_due_at" class="sub">연장 · 처음 {{ fmtDate(l.due_at) }}</span></td>
@@ -131,7 +136,9 @@ onActivated(() => { if (mounted) load() })
 </template>
 
 <style scoped>
+.memo { color: var(--amber); }
 .act { width: 1%; white-space: nowrap; text-align: right; }
 .act .btn + .btn { margin-left: 4px; }
 .date { width: 150px; }
+.period-label { font-size: 13px; font-weight: 600; color: var(--text-2); }
 </style>

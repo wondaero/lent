@@ -3,8 +3,8 @@ import { computed, onActivated, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { books } from '@/api'
 import { BOOK_STATUS, KDC, bookStatusText } from '@/lib/constants'
-import { fmtDate, num, callNumberLines } from '@/lib/format'
-import { parseCallQuery, hasCallTokens, classPrefix } from '@/lib/callNumber'
+import { fmtDate, num, callNumberLines, overdueDays } from '@/lib/format'
+import { parseCallQuery, hasCallTokens, classPrefix, isAuthorMarkOk } from '@/lib/callNumber'
 import { usePagedList } from '@/lib/usePagedList'
 import SearchBox from '@/components/SearchBox.vue'
 import Pagination from '@/components/Pagination.vue'
@@ -99,7 +99,7 @@ onActivated(() => { if (mounted) load() })
       </div>
       <div v-if="loading" class="loading-bar" />
       <div class="tbl-wrap">
-        <!-- 고정 레이아웃: 등록번호/등록일 등은 최소 고정폭, 남는 폭은 전부 서명에 -->
+        <!-- 고정 레이아웃: 등록번호·청구기호·상태·등록일은 고정폭, 남는 폭은 서명·저자·출판사가 나눠 갖는다(서명이 가장 넓게) -->
         <table class="tbl fixed">
           <colgroup>
             <col class="w-regno" />
@@ -115,20 +115,23 @@ onActivated(() => { if (mounted) load() })
           </thead>
           <tbody>
             <tr v-for="b in rows" :key="b.id" class="clickable" @click="router.push(`/books/${b.id}`)">
-              <td class="num muted">{{ b.reg_no }}</td>
+              <td class="num muted nowrap" :title="b.reg_no">{{ b.reg_no }}</td>
               <td class="call">
                 <KdcTag :class-no="b.class_no" />
-                <span class="mark num">{{ callNumberLines(b).slice(1).join(' ') }}</span>
+                <!-- 목록은 분류기호 + 저자기호만(사용자 결정). 권차·복본은 상세·라벨·엑셀에서 -->
+                <!-- 저자기호가 형식에 안 맞으면(옛 시스템의 "글undefinedundefinedㅍ", "글ㅅ", 빈 값) 빨간 "저자기호 확인"(저장값은 그대로, 정리는 따로) -->
+                <span v-if="!isAuthorMarkOk(b.author_mark)" class="mark mark-error" :title="b.author_mark ? `저장된 값: ${b.author_mark}` : '저자기호 없음'">저자기호 확인</span>
+                <span v-else class="mark num">{{ b.author_mark }}</span>
               </td>
               <td class="title">{{ b.title }}<span v-if="b.series_title" class="sub">{{ b.series_title }}</span></td>
               <td class="ellipsis" :title="b.author">{{ b.author }}</td>
               <td class="ellipsis" :title="b.publisher">{{ b.publisher }}</td>
               <td class="ellipsis">
-                <span class="badge" :class="BOOK_STATUS[b.status]?.tone">{{ BOOK_STATUS[b.status]?.label }}</span>
-                <span v-if="b.status === 'hold' && b.hold_reason" class="sub">{{ b.hold_reason }}</span>
-                <span v-if="b.loan" class="sub">{{ b.loan.member_name }} · ~{{ fmtDate(b.loan.due_at) }}</span>
+                <!-- 목록은 배지 + 반납 예정 월-일만(사용자 결정: 상태 칸을 좁게). 대출자·보류 사유는 마우스를 올리거나 상세에서 -->
+                <span class="badge" :class="BOOK_STATUS[b.status]?.tone" :title="b.loan ? `${b.loan.member_name} · 반납 예정 ${fmtDate(b.loan.due_at)}` : b.hold_reason || undefined">{{ BOOK_STATUS[b.status]?.label }}</span>
+                <span v-if="b.loan" class="sub num" :class="{ late: overdueDays(b.loan.due_at) }">~{{ fmtDate(b.loan.due_at).slice(5) }}</span>
               </td>
-              <td class="num muted">{{ fmtDate(b.created_at) }}</td>
+              <td class="num muted nowrap">{{ fmtDate(b.created_at) }}</td>
             </tr>
           </tbody>
         </table>
@@ -147,15 +150,21 @@ onActivated(() => { if (mounted) load() })
 .chip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; border-radius: 13px; background: var(--brand-soft); color: var(--brand-ink); }
 .chip b { font-weight: 600; }
 .chip small { color: var(--text-3); }
+/* 고정 열(등록번호·청구기호·상태·등록일) = 실제로 잰 글자 너비 + 칸 여백(16px) + 글꼴 차이 여유(약 8%, 도서관 PC는 맑은 고딕일 수 있음).
+   나머지(서명·저자·출판사)가 남는 폭을 나눠 갖고 서명이 가장 넓다. 고정 열은 넘쳐도 옆 칸을 침범하지 않게 자른다 */
 .fixed { table-layout: fixed; min-width: 980px; }
-.w-regno { width: 100px; }
-.w-call { width: 180px; }
-.w-author { width: 130px; }
-.w-pub { width: 120px; }
-.w-status { width: 140px; }
-.w-date { width: 108px; }
+.fixed td { overflow: hidden; text-overflow: ellipsis; }
+.w-regno { width: 114px; }   /* EM00011196 = 90px */
+.w-call { width: 116px; }    /* 가장 긴 분류기호 태그 338.09231 = 91px (2026-11-08 실제 데이터) */
+.w-status { width: 82px; }   /* 배지 "대출가능" = 58px */
+.w-date { width: 106px; }    /* 2026-11-02 = 83px */
+.w-author { width: 15%; }
+.w-pub { width: 12%; }
+.late { color: var(--red); font-weight: 600; }
+.call .mark-error { color: var(--red); font-size: 12.5px; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 청구기호: 분류기호(색 태그) 아래 줄에 저자기호(사용자 결정). 열 폭 = 가장 긴 분류기호 태그 */
 .call { white-space: nowrap; }
-.call .mark { margin-left: 6px; font-weight: 600; }
+.call .mark { display: block; margin-top: 3px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .title { font-weight: 500; overflow-wrap: anywhere; }
 </style>

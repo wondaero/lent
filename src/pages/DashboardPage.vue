@@ -131,7 +131,7 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
       </div>
       <div class="tbl-wrap">
         <table class="tbl">
-          <thead><tr><th>도서</th><th>회원</th><th>대출일</th><th>반납예정일</th><th class="r">연체</th></tr></thead>
+          <thead><tr><th>도서</th><th class="fit">회원</th><th class="fit">대출일</th><th class="fit">반납예정일</th><th class="r fit">연체</th></tr></thead>
           <tbody>
             <tr v-for="l in overdue" :key="l.id" class="clickable" @click="router.push(`/members/${l.member.id}`)">
               <td class="title-cell">{{ l.book.title }}<span class="sub">{{ l.book.reg_no }}</span></td>

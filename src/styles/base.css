@@ -173,7 +173,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); width:
 .tbl-wrap { overflow-x: auto; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .tbl th { text-align: left; font-weight: 600; font-size: 12.5px; color: var(--text-3); background: var(--surface-2); padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-.tbl td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.tbl td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .tbl tbody tr:last-child td { border-bottom: 0; }
 .tbl tbody tr.clickable { cursor: pointer; }
 .tbl tbody tr.clickable:hover { background: var(--hover); }
@@ -181,6 +181,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); width:
 .tbl .c { text-align: center; }
 .tbl .nowrap { white-space: nowrap; }
 .tbl .title-cell { font-weight: 500; max-width: 360px; }
+/* 길이가 정해진 열(등록번호·날짜·상태·버튼)은 내용만큼만, 남는 폭은 서명 같은 주 열이 가져간다. th에 붙인다 */
+.tbl .fit { width: 1%; white-space: nowrap; }
+.tbl:has(.fit) .title-cell { max-width: none; }
 .tbl .sub { display: block; color: var(--text-3); font-size: 12.5px; font-weight: 400; }
 .empty { padding: 48px 16px; text-align: center; color: var(--text-3); }
 .loading-bar { height: 2px; background: linear-gradient(90deg, transparent, var(--brand), transparent); background-size: 50% 100%; animation: lb 1s linear infinite; }

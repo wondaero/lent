@@ -11,13 +11,14 @@ const navOpen = ref(false)
 watch(() => route.fullPath, () => (navOpen.value = false))
 
 const nav = [
+  // 업무 흐름 순서(사용자 결정): 카운터 업무(대출/반납 → 대출 기록) → 책 정리(도서 → 라벨 출력) → 회원 → 게시판 → 설정
   { to: '/', label: '대시보드', icon: ICONS.dashboard },
   { to: '/circulation', label: '대출 / 반납', icon: ICONS.circulation },
-  { to: '/books', label: '도서', icon: ICONS.book },
-  { to: '/members', label: '회원', icon: ICONS.member },
   { to: '/loans', label: '대출 기록', icon: ICONS.history },
-  { to: '/posts', label: '게시판', icon: ICONS.board },
+  { to: '/books', label: '도서', icon: ICONS.book },
   { to: '/print', label: '라벨 출력', icon: ICONS.print },
+  { to: '/members', label: '회원', icon: ICONS.member },
+  { to: '/posts', label: '게시판', icon: ICONS.board },
   { to: '/settings', label: '설정', icon: ICONS.settings },
 ]
 

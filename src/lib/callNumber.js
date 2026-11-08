@@ -49,9 +49,25 @@ export function ljcMark(name) {
 }
 
 // 반환: { mark } | { needKorean: true, base } (기준 이름이 한글 두 글자가 아님 → korean으로 직접 입력받아 재호출) | { error }
+// 저자 칸 원문에서 첫 번째 저자 이름만: "글·그림: 셰리 저메이징 ;옮김: 이진영" → "셰리 저메이징", "나관중 지음;이문열 옮김" → "나관중"
+//   이관 데이터·KOLIS 원문에는 역할 표기가 앞에 붙은 경우가 많다. 예전 시스템은 "글"을 이름으로 읽어
+//   "글undefinedundefinedㅍ" 같은 깨진 기호를 저장했다(2026-11-08 실제 데이터 4권). 기호는 앞 두 글자만 쓰므로
+//   이름이 앞에 오는 보통의 경우("나관중 지음")는 결과가 바뀌지 않는다.
+const ROLE = '(?:글|그림|그린이|글쓴이|지음|지은이|저|편|엮음|편저|편역|역|옮김|옮긴이|번역|사진|원작|감수|기획|만화|각색|구성|글그림)'
+export function mainAuthor(author) {
+  // 쉼표·세미콜론으로 나눈 사람 중 역할 표기를 떼고 처음으로 이름이 남는 사람("기획 구성,이경택" → "이경택")
+  const roleOnly = new RegExp(`^(?:\\s*[·・/]?\\s*${ROLE})+$`)
+  for (const part of String(author || '').split(/[;,]/)) {
+    let v = part.replace(/^[^:：]{1,12}[:：]\s*/, '')                                   // 앞 역할 "글·그림: "
+    v = v.replace(new RegExp(`(?:\\s*[·・/]?\\s*${ROLE})+\\s*$`), '').trim()            // 뒤 역할 " 지음", " 글·그림"
+    if (v && !roleOnly.test(v.replace(/\s/g, ''))) return v
+  }
+  return String(author || '').trim()
+}
+
 export function makeAuthorMark({ title = '', seriesTitle = '', author = '', korean = '' }) {
   const series = cleanName(seriesTitle)
-  const base = series || cleanName(author)
+  const base = series || cleanName(mainAuthor(author))
   if (!base && !korean) return { error: '저자 또는 총서명을 먼저 입력해주세요.' }
   let mark = ljcMark(korean.trim() || base)
   if (!mark) return { needKorean: true, base }
@@ -61,6 +77,10 @@ export function makeAuthorMark({ title = '', seriesTitle = '', author = '', kore
   }
   return { mark }
 }
+
+// 저자기호 형식: 글자 1 + 숫자 1~4 + 선택 글자 1(마83ㄷ, 김54, 카297ㅂ). 아니면 화면에 "저자기호 확인"으로 표시
+//   (옛 시스템이 저장한 "글undefinedundefinedㅍ", "글ㅅ", 빈 값 등)
+export const isAuthorMarkOk = (mark) => /^[가-힣A-Za-z]\d{1,4}[ㄱ-ㅎ가-힣A-Za-z]?$/.test(mark || '')
 
 export function normalizeAuthorMark(mark) {
   if (!mark) return ''

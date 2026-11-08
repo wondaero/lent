@@ -13,8 +13,9 @@ npm run build
 
 ```
 src/
-  api/index.js      데이터 접근 레이어 — 화면은 여기만 호출. Supabase 연동 시 이 파일만 교체
-  api/mockDb.js     목업 데이터(도서 1,200 / 회원 260 / 대출 1년치). 스키마 = 예정 Supabase 스키마
+  api/index.js      데이터 접근 레이어 입구 — 화면은 여기만 호출. 로그인 + 아래 둘 중 하나를 골라 연결
+  api/remote.js     Supabase 구현(.env.local 있을 때)
+  api/mock.js       목업 구현(.env.local 없을 때, npm run dev:mock) + api/mockDb.js 예시 데이터
   lib/              포맷 함수, 상수(KDC, 상태값), usePagedList(목록 공통 로직)
   stores/           로그인 세션, 토스트
   layouts/          사이드바 레이아웃

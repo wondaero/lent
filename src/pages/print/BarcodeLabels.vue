@@ -1,7 +1,10 @@
 <script setup>
 // 바코드 라벨(앞표지). 아직 등록 전인 책에 붙일 번호를 순서대로 미리 출력한다.
+// 시작 번호는 자동(마지막 번호 + 1)으로 채워지고 언제든 직접 고칠 수 있다(사용자 결정).
+//   - 인쇄하면 끝 번호가 마지막 번호보다 클 때 그 값이 DB에 저장된다(다음 자동 시작 번호).
+//   - 마지막 번호보다 작은 번호 = 다시 뽑기(훼손 라벨). 마지막 번호는 내리지 않는다 → 다음 자동 번호가 이미 붙인 라벨과 겹치지 않게.
 // 인쇄 버튼을 누르는 순간 번호를 먼저 사용 처리한다 → 출력 확인 전에 화면을 떠나도 같은 번호가 두 번 나오지 않음.
-// 출력물 확인에서 [인쇄 안 함]이면 되돌린다(그 사이 다음 번호가 쓰였으면 건너뜀)
+// 출력물 확인에서 [인쇄 안 함]이면 인쇄 전 번호로 되돌린다(그 사이 다음 번호가 쓰였으면 건너뜀)
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { books } from '@/api'
@@ -26,14 +29,14 @@ const { s, reset, perPage, skip, paginate, startAt, sheetStyle } = useLabelSheet
 })
 
 const MAX = 500
-const mode = ref('new')       // new: 다음 번호부터 | reprint: 번호 지정(훼손 라벨 다시 출력)
 const state = ref(null)       // { lastIssued, next }
 const count = ref(0)
-const from = ref('')
-const to = ref('')
+const start = ref('')         // 시작 번호 입력(EM00011197 또는 11197)
 
+// 시작 번호를 자동 값(다음 번호)으로
+const autoStart = () => { if (state.value) start.value = state.value.next }
 async function loadState() {
-  try { state.value = await books.barcodeState() } catch (e) { toast.error(e) }
+  try { state.value = await books.barcodeState(); autoStart() } catch (e) { toast.error(e) }
 }
 onMounted(loadState)
 // 기본 장수 = 라벨지 한 장(건너뛸 칸 제외)
@@ -43,15 +46,19 @@ watch([perPage, skip], () => { count.value = perPage.value - skip.value }, { imm
 const toNo = (v) => (/^\d+$/.test(String(v).trim()) ? Number(v) : parseRegNo(v))
 
 const range = computed(() => {
-  if (mode.value === 'new') {
-    if (!state.value || !(count.value >= 1)) return null
-    const a = state.value.lastIssued + 1
-    return { a, b: a + Math.min(count.value, MAX) - 1 }
-  }
-  const a = toNo(from.value)
-  const b = to.value.trim() ? toNo(to.value) : a
-  if (a == null || b == null || b < a || b - a >= MAX) return null
-  return { a, b }
+  const a = toNo(start.value)
+  if (!state.value || a == null || a < 1 || !(count.value >= 1) || count.value > MAX) return null
+  return { a, b: a + count.value - 1 }
+})
+// 입력한 범위가 자동 번호와 어떻게 다른지 알려준다
+const rangeNote = computed(() => {
+  if (!range.value || !state.value) return null
+  const { a, b } = range.value
+  const next = state.value.lastIssued + 1
+  if (b < next) return { tone: 'warn', text: '이미 출력한 번호를 다시 뽑습니다. 다음 자동 번호는 바뀌지 않습니다.' }
+  if (a > next) return { tone: 'warn', text: `${fmtRegNo(next)} ~ ${fmtRegNo(a - 1)}을(를) 건너뜁니다. 인쇄하면 다음 자동 번호는 ${fmtRegNo(b + 1)}입니다.` }
+  if (a < next) return { tone: 'warn', text: `앞부분 ${fmtRegNo(a)} ~ ${fmtRegNo(next - 1)}은(는) 이미 출력한 번호입니다. 인쇄하면 다음 자동 번호는 ${fmtRegNo(b + 1)}입니다.` }
+  return { tone: '', text: `인쇄하면 다음 자동 번호는 ${fmtRegNo(b + 1)}입니다.` }
 })
 const codes = computed(() => {
   if (!range.value) return []
@@ -60,32 +67,40 @@ const codes = computed(() => {
   return out
 })
 // 인쇄 중(출력 확인 전)에는 번호를 고정한다. 번호를 먼저 잡으면 "다음 번호"가 바뀌기 때문
-const printing = ref(null)    // { codes, from, reserved }
+const printing = ref(null)    // { codes, from, prev, reserved }
 const shown = computed(() => printing.value?.codes ?? codes.value)
 const pages = computed(() => paginate(shown.value))
 
 async function print() {
   if (!codes.value.length) return toast('출력할 번호를 확인해주세요.', 'error')
-  const job = { codes: [...codes.value], from: range.value.a, reserved: mode.value === 'new' }
+  const prev = state.value.lastIssued
+  // 끝 번호가 마지막 번호보다 크면 번호를 먼저 사용 처리(다시 뽑기만이면 DB를 바꾸지 않음)
+  const job = { codes: [...codes.value], from: range.value.a, prev, reserved: range.value.b > prev }
   printing.value = job
   if (job.reserved) {
-    try { state.value = await books.issueBarcodes(job.from, job.codes.length) }
+    // 확인 창의 버튼은 이 저장이 끝난 뒤에 처리한다(빨리 눌러도 번호가 어긋나지 않게)
+    job.ready = books.issueBarcodes(job.from, job.codes.length, prev).then((st) => { state.value = st })
+    try { await job.ready }
     catch (e) { printing.value = null; toast.error(e); return loadState() }
   }
   await nextTick()
   window.print()
 }
 const printWin = () => window.print()
-function printOk() {
+async function printOk() {
+  await printing.value?.ready
   printing.value = null
+  autoStart()
   toast('바코드 라벨 출력을 완료했습니다.')
 }
 async function printCancel() {
   const job = printing.value
+  await job?.ready
   printing.value = null
   if (!job.reserved) return
   try {
-    state.value = await books.releaseBarcodes(job.from, job.codes.length)
+    state.value = await books.releaseBarcodes(job.from, job.codes.length, job.prev)
+    autoStart()
     toast('번호를 되돌렸습니다.')
   } catch (e) {
     toast.error(e)
@@ -107,31 +122,19 @@ onBeforeRouteLeave(() => {
       <section class="card">
         <div class="card-head"><h3>출력할 번호</h3></div>
         <div class="card-body stack">
-          <div class="seg">
-            <button :class="{ on: mode === 'new' }" @click="mode = 'new'">새 번호</button>
-            <button :class="{ on: mode === 'reprint' }" @click="mode = 'reprint'">재출력</button>
-          </div>
-          <template v-if="mode === 'new'">
-            <div class="line">
-              <span class="lbl">시작 번호</span>
-              <strong class="num">{{ state?.next ?? '…' }}</strong>
-            </div>
-            <label class="line">
-              <span class="lbl">장수</span>
-              <input v-model.number="count" class="input num count" type="number" min="1" :max="MAX" />
-              <button type="button" class="btn sm" @click="count = perPage">한 장({{ perPage }})</button>
-            </label>
-          </template>
-          <template v-else>
-            <label class="line">
-              <span class="lbl">번호</span>
-              <input v-model="from" class="input num" placeholder="EM00000010" />
-              <span class="muted">~</span>
-              <input v-model="to" class="input num" placeholder="(한 장이면 비움)" />
-            </label>
-            <p class="sheet-note">훼손된 라벨을 다시 뽑을 때 씁니다. 다음 시작 번호는 바뀌지 않습니다.</p>
-          </template>
+          <label class="line">
+            <span class="lbl">시작 번호</span>
+            <input v-model="start" class="input num" placeholder="EM00000010" :disabled="!!printing" />
+            <button type="button" class="btn sm" :disabled="!state || start === state.next" @click="autoStart">자동</button>
+          </label>
+          <label class="line">
+            <span class="lbl">장수</span>
+            <input v-model.number="count" class="input num count" type="number" min="1" :max="MAX" :disabled="!!printing" />
+            <button type="button" class="btn sm" @click="count = perPage">한 장({{ perPage }})</button>
+          </label>
+          <p class="sheet-note">마지막 출력 번호 <b class="num">{{ state ? fmtRegNo(state.lastIssued) : '…' }}</b> · 시작 번호는 자동으로 채워지며 직접 고칠 수 있습니다.</p>
           <p v-if="codes.length" class="sheet-note"><b class="num">{{ codes[0] }}</b> ~ <b class="num">{{ codes.at(-1) }}</b> · {{ codes.length }}장</p>
+          <p v-if="rangeNote" class="sheet-note" :class="{ 't-warn': rangeNote.tone === 'warn' }">{{ rangeNote.text }}</p>
           <p v-else class="sheet-note t-red">번호를 확인해주세요. (한 번에 최대 {{ MAX }}장)</p>
         </div>
       </section>
@@ -176,6 +179,7 @@ onBeforeRouteLeave(() => {
 .line .input { flex: 1; min-width: 0; }
 .line .input.count { flex: none; width: 90px; }
 .t-red { color: var(--red); }
+.t-warn { color: var(--amber); }
 .barcode-label { gap: .15em; padding: 0 3mm; font-weight: 400; }
 .lib { font-size: .8em; letter-spacing: .02em; }
 .bars { width: 100%; }

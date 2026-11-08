@@ -8,7 +8,8 @@ import { callSortKey, makeAuthorMark } from '@/lib/callNumber'
 import { fmtRegNo } from '@/lib/regNo'
 // members : id, member_no(숫자, 기존 회원번호 유지 · 새 회원은 최대값 + 1), name, phone, birth_date, gender, address, loan_limit, loan_days,
 //           status, memo, created_at, deleted_at
-// loans   : id, book_id, book_reg_no, book_title, member_id, loaned_at, due_at, extended_due_at, returned_at
+// loans   : id, book_id, book_reg_no, book_title, member_id, loaned_at, due_at, extended_due_at, returned_at, loan_memo, return_memo
+//           loan_memo / return_memo = 대출·반납 처리 한 번에 남긴 메모(그 회차의 책들에 같은 메모)
 //           book_id는 책을 삭제하면 null(ON DELETE SET NULL). book_reg_no·book_title = 대출 당시 값(삭제된 책의 기록 표시용)
 //           due_at = 대출 때 정한 반납 예정일(변경 안 함), extended_due_at = 마지막 연장 반납일(없으면 null)
 // posts   : id, category(notice|activity), title, body(일반 텍스트), pinned, status(published|draft),
@@ -208,21 +209,3 @@ export const nextId = {
   posts: db.posts.length + 1,
   post_images: db.post_images.length + 1,
 }
-
-// 외부 서지 목록(KOLIS-NET 역할) — ISBN 조회 화면 확인용 예시. 모두 가상의 책·ISBN
-//   ISBN 하나에 여러 건이 나오는 대표 상황을 담음
-export const CATALOG = [
-  // ① 세트 ISBN: 전집의 각 권이 같은 ISBN을 공유 → 5건
-  ...[1, 2, 3, 4, 5].map((v) => ({
-    isbn: '9791100000010', title: `과학탐정 루루 ${v}`, series_title: '과학탐정 루루', volume: String(v),
-    author: '한별', publisher: '새싹출판', pub_year: '2023', class_no: '813.8', source: '국립중앙도서관',
-  })),
-  // ② 같은 책을 도서관마다 다르게 분류 → 2건 (자연과학 vs 수필)
-  { isbn: '9791100000027', title: '바다를 건너는 새들', series_title: '', volume: '', author: '윤서진', publisher: '푸른숲길', pub_year: '2021', class_no: '498', source: '가람시립도서관' },
-  { isbn: '9791100000027', title: '바다를 건너는 새들', series_title: '', volume: '', author: '윤서진', publisher: '푸른숲길', pub_year: '2021', class_no: '816', source: '누리작은도서관' },
-  // ③ 개정판: 같은 ISBN으로 판이 다른 기록 → 2건
-  { isbn: '9791100000034', title: '처음 만나는 우리 역사', series_title: '', volume: '', author: '이도담', publisher: '한빛나래', pub_year: '2018', class_no: '911', source: '국립중앙도서관' },
-  { isbn: '9791100000034', title: '처음 만나는 우리 역사 (개정판)', series_title: '', volume: '', author: '이도담', publisher: '한빛나래', pub_year: '2024', class_no: '911', source: '국립중앙도서관' },
-  // ④ 1건: 바로 채워짐
-  { isbn: '9791100000041', title: '작은 도서관 운영 안내', series_title: '', volume: '', author: '김하늘', publisher: '그루터기출판', pub_year: '2024', class_no: '020', source: '국립중앙도서관' },
-]

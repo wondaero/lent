@@ -113,6 +113,8 @@ function exportHistory() {
     { header: '연장 반납일', value: (l) => fmtDate(l.extended_due_at) },
     { header: '반납일', value: (l) => fmtDate(l.returned_at) },
     { header: '상태', value: (l) => loanState(l).label, width: 14 },
+    { header: '대출 메모', value: (l) => l.loan_memo, width: 24 },
+    { header: '반납 메모', value: (l) => l.return_memo, width: 24 },
   ], history.value)
 }
 
@@ -208,11 +210,15 @@ function loanState(l) {
       <div v-if="historyLoading" class="loading-bar" />
       <div class="tbl-wrap">
         <table class="tbl">
-          <thead><tr><th>등록번호</th><th>서명</th><th>대출일</th><th>반납예정일</th><th>반납일</th><th>상태</th></tr></thead>
+          <thead><tr><th class="fit">등록번호</th><th>서명</th><th class="fit">대출일</th><th class="fit">반납예정일</th><th class="fit">반납일</th><th class="fit">상태</th></tr></thead>
           <tbody>
             <tr v-for="l in history" :key="l.id">
               <td class="nowrap num muted">{{ l.book?.reg_no }}</td>
-              <td class="title-cell">{{ l.book?.title ?? '(삭제된 도서)' }}<span class="sub">{{ l.book?.author }}</span></td>
+              <td class="title-cell">
+                {{ l.book?.title ?? '(삭제된 도서)' }}<span class="sub">{{ l.book?.author }}</span>
+                <span v-if="l.loan_memo" class="sub memo">대출 메모: {{ l.loan_memo }}</span>
+                <span v-if="l.return_memo" class="sub memo">반납 메모: {{ l.return_memo }}</span>
+              </td>
               <td class="nowrap num">{{ fmtDate(l.loaned_at) }}</td>
               <td class="nowrap num">{{ fmtDate(dueOf(l)) }}<span v-if="l.extended_due_at" class="sub">연장</span></td>
               <td class="nowrap num">{{ fmtDate(l.returned_at) || '-' }}</td>
@@ -233,6 +239,7 @@ function loanState(l) {
 .summary { display: grid; gap: 10px; font-size: 14px; }
 .summary > div { display: flex; justify-content: space-between; gap: 8px; }
 .red { color: var(--red); }
+.memo { color: var(--amber); }
 .wrap { flex-wrap: wrap; }
 .filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .date { width: 150px; height: 34px; }

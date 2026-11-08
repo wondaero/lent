@@ -28,6 +28,8 @@ const memberKw = ref('')
 const memberResults = shallowRef([])
 const showMemberLoans = ref(false)
 const dueDate = ref(addDays(14))
+// 이번 처리 전체에 남길 메모(선택). 예: "곤충 도감 반납 불필요", "가족이 대신 반납". 처리하면 비운다
+const memo = ref('')
 
 // 반납 처리일: 주말 반납함 도서는 월요일에 처리해도 실제 넣은 날로 소급해야 부당한 연체가 안 생김
 const today = addDays(0)
@@ -168,11 +170,13 @@ async function processQueue(mode = 'all') {
       bookIds: doLend ? lends.value.map((q) => q.book.id) : [],
       dueAt: dueDate.value,
       returnDate: returnDate.value,
+      memo: memo.value,
     })
     const parts = [r.returned && `반납 ${r.returned}권`, r.loaned && `${who.name}님 대출 ${r.loaned}권 (~${dueDate.value})`].filter(Boolean)
     toast(`${parts.join(' · ')} 완료`)
     queue.value = doLend ? [] : lends.value
     returnDate.value = today   // 소급은 한 번만 적용. 다음 처리부터는 다시 오늘
+    memo.value = ''
     if (doLend) resetMember()  // 대출은 한 명씩 → 다음 사람 대출이 이전 회원에게 붙는 사고 방지
     else if (member.value) memberLoans.value = await loans.activeByMember(member.value.id)
   } catch (e) {
@@ -254,6 +258,8 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
                 <div class="grow">
                   <div class="t">{{ q.book.title }}</div>
                   <div class="muted num small">{{ q.book.reg_no }} · {{ q.loan.member?.name }} · 반납예정 {{ fmtDate(dueOf(q.loan)) }}</div>
+                  <!-- 대출할 때 남긴 메모를 반납할 때 확인(예: "표지 찢어진 채 대출", "부록 반납 불필요") -->
+                  <div v-if="q.loan.loan_memo" class="loan-memo small">대출 메모: {{ q.loan.loan_memo }}</div>
                 </div>
                 <span v-if="lateOf(q)" class="badge red">연체 {{ lateOf(q) }}일</span>
                 <button class="btn ghost sm" aria-label="목록에서 제거" @click="removeItem(q)">✕</button>
@@ -362,6 +368,12 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
             </template>
           </div>
 
+          <!-- 이번 처리 전체에 메모 하나(대출한 책 = 대출 메모, 반납한 책 = 반납 메모로 저장) -->
+          <div class="block line">
+            <span class="block-title">메모</span>
+            <input v-model="memo" class="input" maxlength="200" placeholder="선택 · 이번 처리 전체에 남김 (예: 곤충 도감 반납 불필요)" />
+          </div>
+
           <p v-if="problem" class="alert red">{{ problem }}</p>
 
           <div class="actions">
@@ -415,6 +427,7 @@ kbd { font: inherit; font-size: 11.5px; padding: 1px 5px; border: 1px solid var(
 .ret-date.backdated { background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 40%, transparent); }
 .ret-date .note { color: var(--amber); font-size: 12.5px; }
 .member-block { border-left: 3px solid var(--brand); }
+.loan-memo { margin-top: 2px; color: var(--amber); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 12px; border-radius: 8px; background: var(--brand-soft); flex-wrap: wrap; }
 .member-card .name { font-size: 17px; font-weight: 700; color: var(--text); text-decoration: none; }
 .member-card .phone { margin-left: 8px; }

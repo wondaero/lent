@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'v
 import { useRouter } from 'vue-router'
 import { books } from '@/api'
 import { BOOK_STATUS, HOLD_REASONS } from '@/lib/constants'
-import { callNumberLines, fmtDateTime } from '@/lib/format'
+import { callNumberLines, fmtDate, fmtDateTime } from '@/lib/format'
 import { makeAuthorMark } from '@/lib/callNumber'
 import { fmtRegNo, normalizeRegNo, parseRegNo } from '@/lib/regNo'
 import KdcTag from '@/components/KdcTag.vue'
@@ -48,7 +48,7 @@ onMounted(async () => {
     if (isEdit.value) {
       const b = await books.get(props.id)
       Object.keys(form).forEach((k) => (form[k] = b[k] ?? ''))
-      meta.value = { created_at: b.created_at, spine_label_printed: b.spine_label_printed }
+      meta.value = { created_at: b.created_at, spine_label_printed: b.spine_label_printed, loan: b.loan ?? null }
     } else {
       await newEntry()
     }
@@ -62,7 +62,7 @@ onMounted(async () => {
 const candidates = ref([])
 const hasSource = computed(() => candidates.value.some((c) => c.source))
 
-// 개발용: 여러 건이 나오는 상황을 바로 볼 수 있는 예시 ISBN (mockDb의 CATALOG, 가상의 책)
+// 개발용: 여러 건이 나오는 상황을 바로 볼 수 있는 예시 ISBN (api/devCatalog.js, 가상의 책)
 const isDev = import.meta.env.DEV
 const SAMPLE_ISBNS = [
   { label: '세트 5권', isbn: '9791100000010' },
@@ -125,9 +125,10 @@ function genMark() {
   const r = makeAuthorMark({ title: form.title, seriesTitle: form.series_title, author: form.author, korean: korean.value })
   if (r.error) return toast(r.error, 'error')
   if (r.needKorean) {
+    // 자동으로 못 만들면(영문 이름, 저자 칸 형식 문제 등) 빨간 테두리 + 안내 문구로 직접 입력칸을 연다(사용자 결정).
+    // 사라지는 알림 대신 고칠 때까지 보이게. 깨진 기호를 저장하지 않는다
     koreanFor.value = r.base
     nextTick(() => koreanInput.value?.focus())
-    if (korean.value) toast('한글 두 글자를 입력해주세요.', 'error')
     return
   }
   form.author_mark = r.mark
@@ -263,7 +264,7 @@ const preview = computed(() => callNumberLines(form))
               <input ref="koreanInput" v-model="korean" class="input" maxlength="10" placeholder="한글 두 글자 (예: 롤링)" @keydown.enter.prevent="genMark" />
               <button type="button" class="btn" @click="genMark">적용</button>
             </div>
-            <small v-if="koreanFor">"{{ koreanFor }}"은(는) 한글이 아니라서 한글 두 글자로 입력해주세요.</small>
+            <small v-if="koreanFor" class="mark-tip">자동으로 만들지 못했습니다. "{{ koreanFor }}"의 앞 두 글자를 한글로 입력하세요. (예: Rowling → 롤링)</small>
             <small v-else>리재철 제5표 · 총서명이 있으면 총서명 기준</small>
           </div>
           <label class="field">
@@ -304,6 +305,10 @@ const preview = computed(() => callNumberLines(form))
           <dl v-if="meta" class="meta">
             <dt>등록일</dt><dd class="num">{{ fmtDateTime(meta.created_at) }}</dd>
             <dt>라벨</dt><dd>{{ meta.spine_label_printed ? '출력 완료' : '미출력' }}</dd>
+            <template v-if="meta.loan">
+              <dt>대출자</dt><dd><router-link :to="`/members/${meta.loan.member_id}`">{{ meta.loan.member_name }}</router-link></dd>
+              <dt>반납 예정</dt><dd class="num">{{ fmtDate(meta.loan.due_at) }}</dd>
+            </template>
           </dl>
         </div>
       </section>
@@ -357,7 +362,8 @@ const preview = computed(() => callNumberLines(form))
 .side { position: sticky; top: 80px; }
 .inline { display: flex; gap: 6px; }
 .field > label { font-size: 13px; font-weight: 600; color: var(--text-2); }
-.korean .input { border-color: var(--amber); }
+.korean .input { border-color: var(--red); }
+.field small.mark-tip { color: var(--red); }
 .samples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; }
 .modal-scrim { position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / .35); display: grid; place-items: center; padding: 16px; }
 .modal { width: min(860px, 100%); max-height: min(80vh, 640px); display: flex; flex-direction: column; box-shadow: var(--shadow); }

@@ -10,7 +10,7 @@
 // 컬럼 구성이 예상과 다르면 멈춘다(옛 DB 구조가 바뀐 것 → 규칙 확인 필요).
 import fs from 'node:fs'
 import path from 'node:path'
-import { callSortKey } from '../src/lib/callNumber.js'
+import { callSortKey, makeAuthorMark, isAuthorMarkOk } from '../src/lib/callNumber.js'
 import { normalizeRegNo, parseRegNo } from '../src/lib/regNo.js'
 
 const DIR = path.resolve(process.argv[2] || 'doc/db')
@@ -147,34 +147,51 @@ for (const r of current.rows) {
   openDue.set(`${t(r.book_cde)}|${t(r.mbr_cde)}`, dateOnly(r.return_dt))
 }
 
-// 도서 ─ 등록번호 정리. 정리 후 다른 책과 겹치면 원문 유지(사람이 확인)
+// 도서 ─ 등록번호 정리(2026-11-08 실제 데이터 검토로 정한 규칙)
+//   1) normalizeRegNo(앱과 같은 함수): 공백 제거 + 한글 자판으로 들어간 글자 되돌리기(뜨00004055 → EM00004055)
+//   2) 그래도 형식이 아니면 안에 든 "EM+8자리"를 살린다(EM00002838EM00002838, EM000030459788990566171, ㄷM00002622ㄷ)
+//   3) 같은 번호가 이미 있고 서명도 같으면 = 같은 책을 두 번 등록한 것 → 나중 것을 버리고 대출 기록은 남긴 쪽으로 연결
+//      (옛 시스템이 2021-09 "뜨 → EM" 정리 때 EM 행을 새로 만들고 뜨 행을 안 지운 것, 앞에 공백이 붙은 재등록 등)
+//   4) 서명이 비었거나 자모 한 글자뿐이고 대출 기록이 없으면 시험 입력으로 보고 버린다(등록번호 "2", 서명 "ㅏ")
+//   등록번호 칸에 ISBN이 들어간 책 등 나머지는 그대로 넣고 보고서에 적는다(책에 붙은 실제 바코드를 사람이 확인)
 const bookRows = []
 const bookByCode = new Map()
-const origCodes = new Set(books.rows.map((b) => b.book_cde))
-const usedReg = new Set()
+const bookByReg = new Map()
+const sameTitle = (x, y) => t(x).replace(/[\s.]/g, '') === t(y).replace(/[\s.]/g, '')
 const normalized = books.rows.map((b) => {
   const raw = b.book_cde
   const n = normalizeRegNo(raw)
-  return { b, raw, reg: parseRegNo(n) != null ? n : t(raw) }
+  if (parseRegNo(n) != null) return { b, raw, reg: n }
+  const inner = n.match(/EM\d{8}/)?.[0]
+  return inner ? { b, raw, reg: inner, salvaged: true } : { b, raw, reg: t(raw) }
 })
-const regCount = new Map()
-for (const x of normalized) regCount.set(x.reg, (regCount.get(x.reg) || 0) + 1)
+const loanedCodes = new Set(history.rows.map((h) => t(h.book_cde)))
 const activeBooks = new Set()
 for (const h of history.rows) if (!t(h.return_dt)) activeBooks.add(t(h.book_cde))
-// 원문이 이미 정확한 번호인 행을 먼저 처리 → 공백·한글 자판으로 잘못 들어간 중복 등록이 밀려난다
-//   (예: " EM00005724"(2022)와 "EM00005724"(2024)가 같은 책 → 대출 기록이 가리키는 정상 번호 쪽을 남김)
+// 원문이 이미 정확한 번호인 행을 먼저 처리 → 잘못 들어간 쪽(공백·뜨·덧붙음)이 중복으로 밀려난다
 normalized.sort((x, y) => (x.raw === x.reg ? 0 : 1) - (y.raw === y.reg ? 0 : 1))
-for (const { b, raw, reg: wanted } of normalized) {
+for (const { b, raw, reg: wanted, salvaged } of normalized) {
   let reg = wanted
-  if (wanted !== t(raw) && (regCount.get(wanted) > 1 || origCodes.has(wanted))) {
+  if (!t(b.title).replace(/^[ㄱ-ㅣ]$/, '') && !loanedCodes.has(t(raw))) {
+    note('도서 등록번호', `시험 입력으로 보여 제외 "${raw}": 서명 "${t(b.title)}"`)
+    continue
+  }
+  const kept = bookByReg.get(wanted)
+  if (kept) {
+    if (sameTitle(kept.title, b.title)) {
+      note('도서 등록번호', `같은 책 중복 등록이라 제외 "${raw}" (${rawDate(b.reg_dt).slice(0, 10)} 등록, 남긴 번호 ${kept.reg_no}): ${t(b.title)}`)
+      bookByCode.set(t(raw), kept) // 이 번호를 가리키는 대출 기록은 남긴 책으로
+      continue
+    }
     reg = t(raw)
-    note('도서 등록번호', `"${raw}" → "${wanted}"로 바꾸면 다른 책과 겹쳐 그대로 둠: ${t(b.title)}`)
+    note('도서 등록번호', `"${raw}" → "${wanted}"는 서명이 다른 책이 이미 써서 원문 그대로 둠: ${t(b.title)}`)
+    if (bookByReg.has(reg)) { note('도서 등록번호', `원문 번호도 겹쳐 제외 "${raw}": ${t(b.title)}`); continue }
+  } else if (salvaged) {
+    note('도서 등록번호', `"${raw}" → "${wanted}" (번호 안의 EM+8자리를 살림): ${t(b.title)}`)
   } else if (wanted !== raw && parseRegNo(wanted) != null) {
     report.counts['등록번호 자동 보정'] = (report.counts['등록번호 자동 보정'] || 0) + 1
   }
-  if (parseRegNo(reg) == null) note('도서 등록번호', `형식이 EM+8자리가 아님 "${reg}": ${t(b.title)}`)
-  if (usedReg.has(reg)) { note('도서 등록번호', `같은 등록번호가 이미 있어 제외(중복 등록) "${raw}" (${rawDate(b.reg_dt).slice(0, 10)} 등록): ${t(b.title)}`); continue }
-  usedReg.add(reg)
+  if (parseRegNo(reg) == null) note('도서 등록번호', `형식이 EM+8자리가 아님 "${reg}" → 서가에서 실제 바코드 확인 후 도서 수정: ${t(b.title)}`)
   let status = BOOK_STATUS[t(b.book_sts)]
   if (!status) { note('도서 상태', `처음 보는 상태 "${b.book_sts}" → 대출가능으로: ${reg}`); status = 'available' }
   if (activeBooks.has(t(raw))) {
@@ -192,10 +209,16 @@ for (const { b, raw, reg: wanted } of normalized) {
     spine_label_printed: t(b.author_cde_chk) === 'y', memo: orNull(b.memo),
     created_at: kstTimestamp(b.reg_dt) || NOW,
   }
+  // 저자기호가 형식에 안 맞으면(옛 시스템이 "글·그림: …"의 "글"을 이름으로 읽어 "글undefinedundefinedㅍ"를 저장) 제안값과 함께 보고
+  if (!isAuthorMarkOk(row.author_mark)) {
+    const s = makeAuthorMark({ title: row.title, seriesTitle: row.series_title || '', author: row.author })
+    note('저자기호', `${reg} "${row.author_mark ?? '(없음)'}" 형식이 이상함 → 제안 ${s.mark ?? '(직접 입력)'}: ${row.title}`)
+  }
   row.call_sort_key = callSortKey(row)
   bookRows.push(row)
   bookByCode.set(t(raw), row)
   bookByCode.set(reg, row)
+  bookByReg.set(reg, row)
 }
 
 // 대출 기록 ─ 예정일: 대출 중이면 lib_rent_book, 반납 완료면 대출일 + 회원 대출기간.
@@ -244,21 +267,18 @@ function inserts(table, rows, cols) {
 const maxEm = Math.max(0, ...bookRows.map((b) => parseRegNo(b.reg_no) ?? 0))
 const head = `-- 옛 DB 이관 데이터. scripts/legacy-import.mjs가 생성(${new Date().toISOString()}). 직접 고치지 말 것
 -- 원본: ${[books, members, history, current].map((x) => x.file).join(', ')}`
-// 첫 문장: 새 시스템에서 이미 대출/반납을 처리했으면 덮어쓰지 않는다(이관 후 실제 운영 데이터 보호) → 비우고 시작
-const first = `do $$
-declare v_at timestamptz := (select (value #>> '{}')::timestamptz from public.settings where key = 'legacy_imported_at');
-begin
-  if v_at is not null and exists (select 1 from public.loans where loaned_at > v_at or returned_at > v_at) then
-    raise exception '이관 이후 새 시스템에서 처리한 대출/반납이 있어 다시 이관할 수 없습니다.';
-  end if;
-end $$;
-truncate public.loans, public.books, public.members restart identity;`
-// 마지막 문장: 이관 완료 표시는 맨 끝에만 → 중간에 실패하면 "이관 완료"가 아니므로 처음부터 다시 실행하면 된다
+// 첫 문장: 로그인 계정(auth)·직원 명단(staff)만 남기고 앱 데이터를 모두 비운다(사용자 결정).
+//   이관은 전환하는 날 한 번 하는 작업 → 그 전에 새 시스템에서 시험한 대출/반납·등록·게시글도 함께 지워진다.
+//   게시글 사진 "파일"(Storage)은 DB를 비워도 남으므로 전환 전에 게시판 화면에서 시험 글을 지운다(doc/migration.md).
+const first = `truncate public.loans, public.post_images, public.posts, public.books, public.members restart identity;`
+// 마지막 문장: 번호 재설정·이관 시각. 중간에 실패하면 처음부터 다시 실행하면 된다(첫 파일이 비우고 시작)
 const last = `select setval(pg_get_serial_sequence('public.members', 'id'), (select coalesce(max(id), 1) from public.members));
 select setval(pg_get_serial_sequence('public.books', 'id'), (select coalesce(max(id), 1) from public.books));
 select setval(pg_get_serial_sequence('public.loans', 'id'), (select coalesce(max(id), 1) from public.loans));
+-- 바코드 라벨 마지막 번호 = 이관한 책의 가장 큰 EM 번호(시험으로 출력한 번호는 버린다)
 insert into public.settings (key, value) values ('barcode_last_issued_no', to_jsonb(${maxEm}))
-  on conflict (key) do update set value = to_jsonb(greatest((public.settings.value #>> '{}')::int, ${maxEm}));
+  on conflict (key) do update set value = excluded.value;
+-- 이관한 시각(기록용)
 insert into public.settings (key, value) values ('legacy_imported_at', to_jsonb(now()))
   on conflict (key) do update set value = excluded.value;`
 const body = [
