@@ -4,7 +4,8 @@ Vue 3 + Vite. 현재는 목업 데이터로 동작하며, 추후 Supabase로 교
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173  (데모 계정 admin@lib.local / admin1234)
+npm run dev       # http://localhost:5173  (.env.local 있으면 Supabase 로그인)
+npm run dev:mock  # Supabase 없이 목업 데이터로 (데모 계정 admin / admin1234)
 npm run build
 ```
 

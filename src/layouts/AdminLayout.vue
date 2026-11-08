@@ -45,7 +45,7 @@ async function onLogout() {
         </router-link>
       </nav>
       <div class="side-foot">
-        <div class="user">{{ session.user?.name }}<small>{{ session.user?.email }}</small></div>
+        <div class="user">{{ session.user?.name }}<small>{{ session.user?.loginId }}</small></div>
         <button class="btn ghost sm" @click="onLogout">로그아웃</button>
       </div>
     </aside>

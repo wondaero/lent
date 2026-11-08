@@ -29,6 +29,10 @@ export const GENDER = { M: '남', F: '여' }
 
 export const LIBRARY_NAME = '그루터기작은도서관'
 
+// 관리자 로그인은 아이디(예전 시스템 아이디 그대로). Supabase Auth는 이메일만 받으므로
+// "아이디@LOGIN_DOMAIN"으로 바꿔 로그인한다. 대시보드에서 계정을 만들 때도 이 형식(예: abc123@lent.or.kr)
+export const LOGIN_DOMAIN = 'lent.or.kr'
+
 // 게시판 분류. photos = 사진 첨부 가능(활동만, 사용자 결정)
 export const POST_CATEGORY = {
   notice: { label: '공지사항', photos: false },

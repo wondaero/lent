@@ -7,16 +7,16 @@ import { LIBRARY_NAME } from '@/lib/constants'
 
 const route = useRoute()
 const router = useRouter()
-const form = reactive({ email: '', password: '' })
+const form = reactive({ id: '', password: '' })
 const error = ref('')
 const busy = ref(false)
 
 async function submit() {
   error.value = ''
-  if (!form.email || !form.password) { error.value = '이메일과 비밀번호를 입력해주세요.'; return }
+  if (!form.id.trim() || !form.password) { error.value = '아이디와 비밀번호를 입력해주세요.'; return }
   busy.value = true
   try {
-    await login(form.email.trim(), form.password)
+    await login(form.id, form.password)
     router.replace(typeof route.query.next === 'string' ? route.query.next : '/')
   } catch (e) {
     error.value = e.message
@@ -35,8 +35,8 @@ async function submit() {
         <p class="muted">관리자 로그인</p>
       </div>
       <label class="field">
-        <span>이메일</span>
-        <input v-model="form.email" class="input lg" type="email" autocomplete="username" autofocus />
+        <span>아이디</span>
+        <input v-model="form.id" class="input lg" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" autofocus />
       </label>
       <label class="field">
         <span>비밀번호</span>
@@ -44,7 +44,7 @@ async function submit() {
       </label>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <button class="btn primary lg" type="submit" :disabled="busy">{{ busy ? '로그인 중…' : '로그인' }}</button>
-      <p v-if="auth.isDemo" class="hint muted">데모 계정: admin@lib.local / admin1234</p>
+      <p v-if="auth.isDemo" class="hint muted">데모 계정: admin / admin1234</p>
     </form>
   </div>
 </template>

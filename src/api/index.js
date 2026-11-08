@@ -5,7 +5,8 @@ import { db, nextId, CATALOG } from './mockDb'
 import { parseCallQuery, hasCallTokens, matchCall, callSortKey, normalizeAuthorMark } from '@/lib/callNumber'
 import { fmtDate, dueOf } from '@/lib/format'
 import { fmtRegNo, normalizeRegNo, parseRegNo } from '@/lib/regNo'
-import { POST_CATEGORY, POST_PHOTO } from '@/lib/constants'
+import { POST_CATEGORY, POST_PHOTO, LOGIN_DOMAIN } from '@/lib/constants'
+import { hangulToKeys } from '@/lib/regNo'
 
 import { SUPABASE_URL, SUPABASE_KEY, hasSupabase, getClient, bearer } from './supabase'
 
@@ -29,11 +30,15 @@ const SESSION_KEY = 'lent.session'
 
 // Supabase 모드: 관리자 = Supabase Auth 계정 중 직원 명단(staff)에 있는 계정. 도서관 회원(members)은 로그인하지 않는다.
 //   직원 명단에 없으면 로그인해도 데이터가 안 보이므로(RLS) 로그인 단계에서 막는다.
-// 목업 모드: 데모 계정 admin@lib.local / admin1234
+// 목업 모드: 데모 계정 admin / admin1234
+// 아이디 → 로그인 이메일. 한글 자판 상태로 친 아이디(ㅁ앙ㅑㅜ)도 영문(admin)으로 되돌린다
+const loginEmail = (id) => { const v = hangulToKeys(id.trim()).toLowerCase(); return v.includes('@') ? v : `${v}@${LOGIN_DOMAIN}` }
+const loginId = (email = '') => email.replace(`@${LOGIN_DOMAIN}`, '')
+
 async function staffUser(sb, user) {
   const { data, error } = await sb.from('staff').select('name').eq('user_id', user.id).maybeSingle()
   if (error) throw new Error('직원 정보를 확인하지 못했습니다. 네트워크를 확인해주세요.')
-  return data ? { id: user.id, email: user.email, name: data.name } : null
+  return data ? { id: user.id, loginId: loginId(user.email), name: data.name } : null
 }
 
 export const auth = {
@@ -49,19 +54,19 @@ export const auth = {
       return { user }
     } catch {
       // 오프라인 등으로 확인 못 하면 일단 로그인 상태 유지(데이터 접근은 어차피 DB가 토큰으로 검증)
-      return { user: { id: data.session.user.id, email: data.session.user.email, name: '관리자' } }
+      return { user: { id: data.session.user.id, loginId: loginId(data.session.user.email), name: '관리자' } }
     }
   },
-  async signIn(email, password) {
+  async signIn(id, password) {
     const sb = await getClient()
     if (!sb) {
-      if (email !== 'admin@lib.local' || password !== 'admin1234') return fail('이메일 또는 비밀번호가 올바르지 않습니다.')
-      const session = { user: { email, name: '관리자' }, at: nowIso() }
+      if (hangulToKeys(id.trim()).toLowerCase() !== 'admin' || password !== 'admin1234') return fail('아이디 또는 비밀번호가 올바르지 않습니다.')
+      const session = { user: { loginId: 'admin', name: '관리자' }, at: nowIso() }
       try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)) } catch {}
       return wait(session)
     }
-    const { data, error } = await sb.auth.signInWithPassword({ email, password })
-    if (error) throw new Error(error.status === 400 ? '이메일 또는 비밀번호가 올바르지 않습니다.' : `로그인하지 못했습니다. (${error.message})`)
+    const { data, error } = await sb.auth.signInWithPassword({ email: loginEmail(id), password })
+    if (error) throw new Error(error.status === 400 ? '아이디 또는 비밀번호가 올바르지 않습니다.' : `로그인하지 못했습니다. (${error.message})`)
     const user = await staffUser(sb, data.user)
     if (!user) { await sb.auth.signOut(); throw new Error('관리자로 등록되지 않은 계정입니다.') }
     return { user }

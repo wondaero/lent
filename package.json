@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:mock": "VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= vite",
     "build": "vite build",
     "preview": "vite preview",
     "legacy:import": "node scripts/legacy-import.mjs"

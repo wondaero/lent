@@ -13,8 +13,8 @@ export async function initSession(onExpired) {
   })
 }
 
-export async function login(email, password) {
-  const s = await auth.signIn(email, password)
+export async function login(id, password) {
+  const s = await auth.signIn(id, password)
   session.user = s.user
 }
 
