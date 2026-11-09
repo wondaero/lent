@@ -1,6 +1,5 @@
 <script setup>
 import { onActivated, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { loans } from '@/api'
 import { addDays, dueOf, fmtDate, num, overdueDays } from '@/lib/format'
 import { usePagedList } from '@/lib/usePagedList'
@@ -12,7 +11,6 @@ import ExportButton from '@/components/ExportButton.vue'
 
 defineOptions({ name: 'LoanListPage' })
 
-const router = useRouter()
 const { filters, page, rows, total, loading, perPage, load } = usePagedList(loans.list, { keyword: '', state: '', from: '', to: '' })
 
 // 대출 기록 = 대출 한 건이 한 줄, 대출일 최신순으로 쌓인다. 처음엔 전체(사용자 결정)
@@ -107,18 +105,25 @@ onActivated(() => { if (mounted) load() })
         <table class="tbl">
           <thead><tr><th>도서</th><th class="fit">회원</th><th class="fit">대출일</th><th class="fit">반납예정일</th><th class="fit">반납일</th><th class="fit">상태</th><th class="act fit" /></tr></thead>
           <tbody>
-            <tr v-for="l in rows" :key="l.id" class="clickable" @click="l.member && router.push(`/members/${l.member.id}`)">
+            <!-- 책과 회원이 함께 있는 줄: 줄 전체 클릭 없이 서명 → 도서, 이름 → 회원(사용자 결정) -->
+            <tr v-for="l in rows" :key="l.id">
               <td class="title-cell">
-                {{ l.book?.title ?? '(삭제된 도서)' }}<span class="sub num">{{ l.book?.reg_no }}</span>
+                <router-link v-if="l.book?.id" :to="`/books/${l.book.id}`" class="cell-link">{{ l.book.title }}</router-link>
+                <template v-else>{{ l.book?.title ?? '(삭제된 도서)' }}</template>
+                <span class="sub num">{{ l.book?.reg_no }}</span>
                 <span v-if="l.loan_memo" class="sub memo">대출 메모: {{ l.loan_memo }}</span>
                 <span v-if="l.return_memo" class="sub memo">반납 메모: {{ l.return_memo }}</span>
               </td>
-              <td class="nowrap">{{ l.member?.name ?? '-' }}<span class="sub num">{{ l.member?.phone }}</span></td>
+              <td class="nowrap">
+                <router-link v-if="l.member" :to="`/members/${l.member.id}`" class="cell-link">{{ l.member.name }}</router-link>
+                <template v-else>-</template>
+                <span class="sub num">{{ l.member?.phone }}</span>
+              </td>
               <td class="nowrap num">{{ fmtDate(l.loaned_at) }}</td>
               <td class="nowrap num">{{ fmtDate(dueOf(l)) }}<span v-if="l.extended_due_at" class="sub">연장 · 처음 {{ fmtDate(l.due_at) }}</span></td>
               <td class="nowrap num">{{ fmtDate(l.returned_at) || '-' }}</td>
               <td><span class="badge" :class="stateOf(l).tone">{{ stateOf(l).label }}</span></td>
-              <td class="act" @click.stop>
+              <td class="act">
                 <template v-if="!l.returned_at">
                   <button class="btn sm secondary" @click="openAction(l, 'return')">반납</button>
                   <button class="btn sm" @click="openAction(l, 'extend')">연장</button>

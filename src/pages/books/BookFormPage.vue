@@ -1,9 +1,9 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
-import { books } from '@/api'
+import { books, loans } from '@/api'
 import { BOOK_STATUS, HOLD_REASONS } from '@/lib/constants'
-import { callNumberLines, fmtDate, fmtDateTime } from '@/lib/format'
+import { callNumberLines, dueOf, fmtDate, fmtDateTime, overdueDays } from '@/lib/format'
 import { makeAuthorMark } from '@/lib/callNumber'
 import { fmtRegNo, normalizeRegNo, parseRegNo } from '@/lib/regNo'
 import KdcTag from '@/components/KdcTag.vue'
@@ -19,6 +19,22 @@ const empty = () => ({
 })
 const form = reactive(empty())
 const meta = ref(null)
+
+// 대출 이력(책 입장): 이 책을 누가 언제 빌렸는지. 회원 화면의 대출 이력과 같은 모양
+const history = shallowRef([])
+const historyLoading = ref(false)
+const borrowerCount = computed(() => new Set(history.value.map((l) => l.member_id)).size)
+async function loadHistory() {
+  historyLoading.value = true
+  try { history.value = await loans.byBook(props.id) }
+  catch (e) { toast.error(e) }
+  finally { historyLoading.value = false }
+}
+function loanState(l) {
+  if (!l.returned_at) return l.overdue ? { label: `연체 ${overdueDays(dueOf(l))}일`, tone: 'red' } : { label: '대출중', tone: 'blue' }
+  const late = overdueDays(dueOf(l), l.returned_at)
+  return late ? { label: `반납(연체 ${late}일)`, tone: 'amber' } : { label: '반납', tone: 'gray' }
+}
 const errors = ref({})
 const busy = ref(false)
 const lookingUp = ref(false)
@@ -49,6 +65,7 @@ onMounted(async () => {
       const b = await books.get(props.id)
       Object.keys(form).forEach((k) => (form[k] = b[k] ?? ''))
       meta.value = { created_at: b.created_at, spine_label_printed: b.spine_label_printed, loan: b.loan ?? null }
+      loadHistory()
     } else {
       await newEntry()
     }
@@ -202,6 +219,7 @@ const preview = computed(() => callNumberLines(form))
 </script>
 
 <template>
+  <div class="stack">
   <form class="layout" @submit.prevent="save">
     <div class="stack">
       <section class="card">
@@ -355,9 +373,39 @@ const preview = computed(() => callNumberLines(form))
       </div>
     </Teleport>
   </form>
+
+  <section v-if="isEdit" class="card">
+    <div class="card-head">
+      <h3>대출 이력 <span class="muted num">총 {{ history.length }}회 · {{ borrowerCount }}명</span></h3>
+    </div>
+    <div v-if="historyLoading" class="loading-bar" />
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>회원</th><th class="fit">대출일</th><th class="fit">반납예정일</th><th class="fit">반납일</th><th class="fit">상태</th></tr></thead>
+        <tbody>
+          <tr v-for="l in history" :key="l.id">
+            <td class="title-cell">
+              <router-link v-if="l.member" :to="`/members/${l.member.id}`" class="cell-link">{{ l.member.name }}</router-link>
+              <template v-else>(삭제된 회원)</template>
+              <span class="sub num">{{ l.member?.phone }} · {{ l.member?.member_no }}</span>
+              <span v-if="l.loan_memo" class="sub memo">대출 메모: {{ l.loan_memo }}</span>
+              <span v-if="l.return_memo" class="sub memo">반납 메모: {{ l.return_memo }}</span>
+            </td>
+            <td class="nowrap num">{{ fmtDate(l.loaned_at) }}</td>
+            <td class="nowrap num">{{ fmtDate(dueOf(l)) }}<span v-if="l.extended_due_at" class="sub">연장</span></td>
+            <td class="nowrap num">{{ fmtDate(l.returned_at) || '-' }}</td>
+            <td><span class="badge" :class="loanState(l).tone">{{ loanState(l).label }}</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-if="!historyLoading && !history.length" class="empty">아직 대출된 적이 없습니다.</div>
+    </div>
+  </section>
+  </div>
 </template>
 
 <style scoped>
+.memo { color: var(--amber); }
 .layout { display: grid; grid-template-columns: 1fr 280px; gap: 18px; align-items: start; }
 .side { position: sticky; top: 80px; }
 .inline { display: flex; gap: 6px; }

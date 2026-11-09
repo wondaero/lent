@@ -1,13 +1,11 @@
 <script setup>
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { stats, loans } from '@/api'
 import { KDC } from '@/lib/constants'
-import { num, fmtDate, overdueDays, dueOf } from '@/lib/format'
+import { num, fmtDate, overdueDays, dueOf, addDays } from '@/lib/format'
 import { toast } from '@/stores/toast'
 import ChartCanvas from '@/components/ChartCanvas.vue'
 
-const router = useRouter()
 const summary = shallowRef(null)
 const trend = shallowRef(null)
 const unit = ref('day')
@@ -26,6 +24,18 @@ onMounted(async () => {
     overdue.value = o.rows
   } catch (e) { toast.error(e) }
 })
+
+// 대출 순위(사용자 결정): 많이 빌려진 책 + 많이 빌린 회원(이름은 DB에서 가려 옴, 홍*동). 회원 순위는 나중에 뺄 수 있음
+const rankPeriod = ref('year')
+const rankPeriods = [['month', '이번 달'], ['year', '올해'], ['all', '전체']]
+const rankings = shallowRef(null)
+async function loadRankings() {
+  const d = new Date()
+  const from = rankPeriod.value === 'month' ? addDays(1 - d.getDate()) : rankPeriod.value === 'year' ? `${d.getFullYear()}-01-01` : ''
+  rankings.value = await stats.rankings({ from, limit: 10 })
+}
+watch(rankPeriod, () => loadRankings().catch(toast.error))
+onMounted(() => loadRankings().catch(toast.error))
 
 async function loadTrend() {
   trend.value = await stats.loanTrend(unit.value)
@@ -126,6 +136,39 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
 
     <section class="card">
       <div class="card-head">
+        <h3>대출 순위</h3>
+        <div class="seg">
+          <button v-for="p in rankPeriods" :key="p[0]" :class="{ on: rankPeriod === p[0] }" @click="rankPeriod = p[0]">{{ p[1] }}</button>
+        </div>
+      </div>
+      <div class="ranks">
+        <div>
+          <h4 class="rank-title">많이 빌려진 책</h4>
+          <ol v-if="rankings?.books.length" class="rank-list">
+            <li v-for="(b, i) in rankings.books" :key="b.title">
+              <span class="no num">{{ i + 1 }}</span>
+              <span class="grow"><span class="t">{{ b.title }}</span><span class="sub">{{ b.author }}<template v-if="b.copies > 1"> · {{ b.copies }}권 소장</template></span></span>
+              <strong class="cnt num">{{ num(b.loans) }}회</strong>
+            </li>
+          </ol>
+          <div v-else-if="rankings" class="empty small">대출 기록이 없습니다.</div>
+        </div>
+        <div>
+          <h4 class="rank-title">많이 빌린 회원</h4>
+          <ol v-if="rankings?.members.length" class="rank-list">
+            <li v-for="(m, i) in rankings.members" :key="i">
+              <span class="no num">{{ i + 1 }}</span>
+              <span class="grow t">{{ m.name }}</span>
+              <strong class="cnt num">{{ num(m.loans) }}권</strong>
+            </li>
+          </ol>
+          <div v-else-if="rankings" class="empty small">대출 기록이 없습니다.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
         <h3>연체 도서</h3>
         <router-link to="/loans" class="btn ghost sm">전체 보기</router-link>
       </div>
@@ -133,9 +176,16 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
         <table class="tbl">
           <thead><tr><th>도서</th><th class="fit">회원</th><th class="fit">대출일</th><th class="fit">반납예정일</th><th class="r fit">연체</th></tr></thead>
           <tbody>
-            <tr v-for="l in overdue" :key="l.id" class="clickable" @click="router.push(`/members/${l.member.id}`)">
-              <td class="title-cell">{{ l.book.title }}<span class="sub">{{ l.book.reg_no }}</span></td>
-              <td class="nowrap">{{ l.member.name }}<span class="sub">{{ l.member.phone }}</span></td>
+            <tr v-for="l in overdue" :key="l.id">
+              <td class="title-cell">
+                <router-link v-if="l.book?.id" :to="`/books/${l.book.id}`" class="cell-link">{{ l.book.title }}</router-link>
+                <template v-else>{{ l.book?.title }}</template>
+                <span class="sub">{{ l.book?.reg_no }}</span>
+              </td>
+              <td class="nowrap">
+                <router-link v-if="l.member" :to="`/members/${l.member.id}`" class="cell-link">{{ l.member.name }}</router-link>
+                <span class="sub">{{ l.member?.phone }}</span>
+              </td>
               <td class="nowrap num">{{ fmtDate(l.loaned_at) }}</td>
               <td class="nowrap num">{{ fmtDate(dueOf(l)) }}</td>
               <td class="r"><span class="badge red num">{{ overdueDays(dueOf(l)) }}일</span></td>
@@ -166,4 +216,19 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
 .chart-h { height: 320px; }
 .total { font-size: 13px; font-weight: 500; margin-left: 6px; }
 @media (max-width: 1100px) { .charts { grid-template-columns: 1fr; } }
+.ranks { display: grid; grid-template-columns: 3fr 2fr; gap: 0; }
+.ranks > div { padding: 14px 18px 16px; min-width: 0; }
+.ranks > div + div { border-left: 1px solid var(--line); }
+.rank-title { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--text-3); }
+.rank-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.rank-list li { display: flex; align-items: center; gap: 10px; padding: 6px 4px; border-bottom: 1px solid var(--line); min-width: 0; }
+.rank-list li:last-child { border-bottom: 0; }
+.rank-list .no { flex: 0 0 22px; text-align: right; font-weight: 700; color: var(--text-3); }
+.rank-list li:nth-child(-n+3) .no { color: var(--brand-ink); }
+.rank-list .grow { flex: 1; min-width: 0; display: grid; }
+.rank-list .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-list .sub { font-size: 12.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-list .cnt { flex: none; font-size: 14px; }
+.small { padding: 24px 8px; font-size: 13px; }
+@media (max-width: 900px) { .ranks { grid-template-columns: 1fr; } .ranks > div + div { border-left: 0; border-top: 1px solid var(--line); } }
 </style>

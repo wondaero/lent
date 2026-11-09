@@ -215,7 +215,9 @@ function loanState(l) {
             <tr v-for="l in history" :key="l.id">
               <td class="nowrap num muted">{{ l.book?.reg_no }}</td>
               <td class="title-cell">
-                {{ l.book?.title ?? '(삭제된 도서)' }}<span class="sub">{{ l.book?.author }}</span>
+                <router-link v-if="l.book?.id" :to="`/books/${l.book.id}`" class="cell-link">{{ l.book.title }}</router-link>
+                <template v-else>{{ l.book?.title ?? '(삭제된 도서)' }}</template>
+                <span class="sub">{{ l.book?.author }}</span>
                 <span v-if="l.loan_memo" class="sub memo">대출 메모: {{ l.loan_memo }}</span>
                 <span v-if="l.return_memo" class="sub memo">반납 메모: {{ l.return_memo }}</span>
               </td>

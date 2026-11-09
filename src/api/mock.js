@@ -3,7 +3,7 @@ import { db, nextId } from './mockDb'
 import { CATALOG } from './devCatalog'
 import { trendBuckets, bucketIndex } from './trend'
 import { callSortKey, normalizeAuthorMark, parseCallQuery, hasCallTokens, matchCall } from '@/lib/callNumber'
-import { fmtDate, dueOf } from '@/lib/format'
+import { fmtDate, dueOf, maskName } from '@/lib/format'
 import { fmtRegNo, normalizeRegNo, parseRegNo } from '@/lib/regNo'
 import { POST_CATEGORY, POST_PHOTO } from '@/lib/constants'
 
@@ -278,6 +278,12 @@ export const loans = {
       .sort((a, b) => (a.loaned_at < b.loaned_at ? 1 : a.loaned_at > b.loaned_at ? -1 : b.id - a.id))
     return wait(rows)
   },
+  // 한 책의 대출 이력(책 상세). 대출일 최신순
+  async byBook(bookId) {
+    const rows = db.loans.filter((l) => l.book_id === +bookId).map(withJoin)
+      .sort((a, b) => (a.loaned_at < b.loaned_at ? 1 : a.loaned_at > b.loaned_at ? -1 : b.id - a.id))
+    return wait(rows)
+  },
   async activeByMember(memberId) {
     return wait(db.loans.filter((l) => l.member_id === +memberId && !l.returned_at).map(withJoin))
   },
@@ -341,6 +347,30 @@ export const loans = {
 
 /* ───────────── 통계 ───────────── */
 export const stats = {
+  // 대출 순위(DB loan_rankings와 같은 규칙): 책은 띄어쓰기를 무시한 서명으로 묶고, 회원 이름은 가린다
+  async rankings({ from = '', limit = 10 } = {}) {
+    const f = from ? new Date(`${from}T00:00:00`).getTime() : -Infinity
+    const books = new Map(), members = new Map()
+    for (const l of db.loans) {
+      if (new Date(l.loaned_at).getTime() < f) continue
+      const b = bookById(l.book_id)
+      if (b) {
+        const k = b.title.replace(/\s/g, '')
+        const e = books.get(k) || { title: b.title, author: b.author, loans: 0, ids: new Set() }
+        e.loans++; e.ids.add(b.id); books.set(k, e)
+      }
+      const m = memberById(l.member_id)
+      if (m && !m.deleted_at) {
+        const e = members.get(m.id) || { name: maskName(m.name), loans: 0 }
+        e.loans++; members.set(m.id, e)
+      }
+    }
+    const top = (arr) => arr.sort((a, b) => b.loans - a.loans).slice(0, limit)
+    return wait({
+      books: top([...books.values()]).map(({ ids, ...e }) => ({ ...e, copies: ids.size })),
+      members: top([...members.values()]),
+    })
+  },
   async dashboard() {
     const today = startOfToday()
     const category = Array(10).fill(0)

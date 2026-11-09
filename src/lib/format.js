@@ -37,6 +37,14 @@ export function overdueDays(dueAt, returnedAt) {
   return Math.max(0, Math.round((end - due) / 86400000))
 }
 
+// 이름 가리기(DB mask_name과 같은 규칙): 홍길동 → 홍*동, 김철 → 김*, 남궁민수 → 남**수
+export function maskName(name) {
+  const s = String(name ?? '')
+  if (s.length <= 1) return s
+  if (s.length === 2) return `${s[0]}*`
+  return s[0] + '*'.repeat(s.length - 2) + s.at(-1)
+}
+
 export const num = (n) => Number(n || 0).toLocaleString('ko-KR')
 
 // 청구기호: 분류기호 / 저자기호 / 권차 / 복본

@@ -255,6 +255,11 @@ export const loans = {
     const { data } = await run(query.order('loaned_at', { ascending: false }).order('id', { ascending: false }))
     return data
   },
+  // 한 책의 대출 이력(책 상세). 대출일 최신순
+  async byBook(bookId) {
+    const { data } = await run((await sb()).from('loan_list').select('*').eq('book_id', bookId).order('loaned_at', { ascending: false }).order('id', { ascending: false }))
+    return data
+  },
   async activeByMember(memberId) {
     const { data } = await run((await sb()).from('loan_list').select('*').eq('member_id', memberId).is('returned_at', null).order('id'))
     return data
@@ -286,6 +291,11 @@ export const loans = {
 
 /* ───────────── 통계 ───────────── */
 export const stats = {
+  // 대출 순위(많이 빌려진 책, 많이 빌린 회원 – 이름은 DB에서 가려서 옴). from = YYYY-MM-DD(없으면 전체)
+  async rankings({ from = '', limit = 10 } = {}) {
+    const { data } = await run((await sb()).rpc('loan_rankings', { p_from: from ? dayStart(from) : null, p_limit: limit }))
+    return data
+  },
   async dashboard() {
     const { data } = await run((await sb()).rpc('dashboard_stats'))
     return data
