@@ -55,7 +55,8 @@ function checkHold(data) {
 
 export const books = {
   // sort: 'recent'(최신 등록) | 'call'(청구기호 = 서가 순서) | 'title'
-  async list({ page = 1, perPage = 20, keyword = '', status = '', label = '', category = '', sort = 'recent' } = {}) {
+  // from/to(YYYY-MM-DD, to 포함) = 등록일 기간
+  async list({ page = 1, perPage = 20, keyword = '', status = '', label = '', category = '', sort = 'recent', from = '', to = '' } = {}) {
     // 한글 자판으로 찍힌 등록번호("뜨00004055")도 찾는다. 청구기호 해석 전에 변환해야 저자기호로 오인하지 않음
     const asReg = normalizeRegNo(keyword)
     const q = parseCallQuery(parseRegNo(asReg) != null ? asReg : keyword)
@@ -73,6 +74,8 @@ export const books = {
     if (status) query = query.eq('status', status)
     if (label === 'unprinted') query = query.eq('spine_label_printed', false)
     if (category !== '') query = query.like('class_no', `${category}%`)
+    if (from) query = query.gte('created_at', dayStart(from))
+    if (to) query = query.lt('created_at', dayAfter(to))
     if (sort === 'call') query = query.order('call_sort_key').order('id')
     else if (sort === 'title') query = query.order('title').order('id')
     else query = query.order('id', { ascending: false })
@@ -104,6 +107,8 @@ export const books = {
   // 인쇄 취소: 인쇄 전 마지막 번호(prev)로 되돌림
   async releaseBarcodes(from, count, prev) {
     const { error, data } = await (await sb()).rpc('barcode_release', { p_from: from, p_count: count, p_prev: prev })
+    // P0001 = DB 함수가 직접 거부(그 사이 다음 번호가 쓰임). 네트워크·로그인 만료 같은 다른 오류는 그대로 알린다
+    if (error && error.code !== 'P0001') throw toError(error)
     if (error) throw new Error(`이미 다음 번호가 사용되어 되돌리지 않았습니다. ${fmtRegNo(from)} ~ ${fmtRegNo(from + count - 1)}은(는) 건너뜁니다.`)
     return { lastIssued: data, next: fmtRegNo(data + 1) }
   },
@@ -120,13 +125,19 @@ export const books = {
   },
   async update(id, input) {
     let data = pickBook(input)
+    const cur = await books.get(id)
+    // '대출중'은 대출/반납 처리만 바꾼다. 수정 화면이 열려 있던 사이 대출·반납이 일어났을 때
+    // 화면의 옛 status로 덮어쓰지 않게 대출중이 걸린 변경은 보내지 않는다(DB 트리거도 같은 규칙)
+    if ('status' in data && (data.status === 'loaned' || cur.status === 'loaned')) {
+      delete data.status
+      delete data.hold_reason
+    }
     if (data.reg_no != null) {
       data.reg_no = normalizeRegNo(data.reg_no)
       if (parseRegNo(data.reg_no) == null) throw new Error('등록번호 형식이 올바르지 않습니다. (예: EM00005724)')
     }
     data = checkHold(data)
     // 청구기호 요소가 바뀌면 서가순 정렬 키도 다시 계산(현재 값과 합쳐서)
-    const cur = await books.get(id)
     const next = { ...cur, ...data }
     data.author_mark = normalizeAuthorMark(next.author_mark)
     data.call_sort_key = callSortKey({ ...next, author_mark: data.author_mark })
@@ -183,7 +194,8 @@ function memberKeyword(query, keyword) {
   const ors = [contains('name', kw), contains('phone', kw)]
   const digits = kw.replace(/\D/g, '')
   if (digits && digits === kw.replace(/[\s-]/g, '')) ors.push(contains('phone_digits', digits))
-  if (/^\d+$/.test(kw)) ors.push(`member_no.eq.${kw}`)
+  // 회원번호는 integer → 10자리 이상(ISBN 등을 잘못 붙여넣음)을 넣으면 범위 초과로 검색 전체가 실패하므로 제외
+  if (/^\d{1,9}$/.test(kw)) ors.push(`member_no.eq.${kw}`)
   return query.or(ors.join(','))
 }
 
@@ -335,6 +347,15 @@ async function imagesOf(postId) {
   return data.map(withUrls)
 }
 
+// Storage 파일 지우기. 실패를 조용히 넘기면 공개 버킷에 사진이 남으므로 오류를 알린다
+async function removeFiles(store, paths) {
+  if (!paths.length) return
+  const { error } = await store.remove(paths)
+  if (error) throw new Error(`사진 파일을 지우지 못했습니다. 다시 시도해주세요. (${error.message})`)
+}
+// 실패 뒤 정리용: 원래 오류를 가리지 않게 정리 실패는 콘솔에만
+const cleanup = (p) => p.catch((e) => console.warn('정리 실패', e))
+
 // 화면 순서대로 받은 사진 배열을 저장: 새 사진 업로드 → 행 추가, 빠진 사진은 행·파일 삭제, 남은 사진은 순서만 갱신
 async function savePostImages(postId, images = []) {
   const client = await sb()
@@ -344,6 +365,7 @@ async function savePostImages(postId, images = []) {
   const removed = current.filter((i) => !keepIds.has(i.id))
 
   const uploaded = []
+  const insertedIds = []
   try {
     for (const [sort, img] of images.entries()) {
       if (img.id) continue
@@ -355,18 +377,22 @@ async function savePostImages(postId, images = []) {
         if (error) throw new Error(`사진을 올리지 못했습니다. (${error.message})`)
         uploaded.push(p)
       }
-      await run(client.from('post_images').insert({ post_id: postId, path, thumb_path: thumb, width: img.width, height: img.height, sort }))
+      const { data: row } = await run(client.from('post_images').insert({ post_id: postId, path, thumb_path: thumb, width: img.width, height: img.height, sort }).select('id').single())
+      insertedIds.push(row.id)
     }
   } catch (e) {
-    if (uploaded.length) await store.remove(uploaded) // 올리다 실패하면 이번에 올린 파일 정리
+    // 올리다 실패하면 이번에 넣은 행과 파일을 모두 정리(행만 남으면 깨진 사진, 다시 저장하면 중복)
+    if (insertedIds.length) await cleanup(run(client.from('post_images').delete().in('id', insertedIds)))
+    if (uploaded.length) await cleanup(removeFiles(store, uploaded))
     throw e
   }
   for (const [sort, img] of images.entries()) {
     if (img.id) await run(client.from('post_images').update({ sort }).eq('id', img.id))
   }
   if (removed.length) {
+    // 파일 먼저 지운다: 행만 지우고 파일이 남으면 공개 URL로 계속 보임(개인정보). 파일 삭제가 실패하면 행이 남아 다시 시도 가능
+    await removeFiles(store, removed.flatMap((i) => [i.path, i.thumb_path]))
     await run(client.from('post_images').delete().in('id', removed.map((i) => i.id)))
-    await store.remove(removed.flatMap((i) => [i.path, i.thumb_path]))
   }
 }
 
@@ -402,7 +428,7 @@ export const posts = {
       await savePostImages(row.id, images)
     } catch (e) {
       // 사진 저장이 실패하면 글도 남기지 않는다(사진 없는 활동 글이 게시되는 것 방지)
-      await (await sb()).from('posts').delete().eq('id', row.id)
+      await cleanup(run((await sb()).from('posts').delete().eq('id', row.id)))
       throw e
     }
     return { ...row, images: await imagesOf(row.id) }
@@ -411,18 +437,20 @@ export const posts = {
     const cur = await posts.get(id)
     const err = checkPost({ ...cur, ...input, images })
     if (err) throw new Error(err)
-    await savePostImages(cur.id, images)
+    // 글을 먼저 저장하고 사진을 바꾼다(사진만 바뀌고 글 저장이 실패하는 일 방지)
     const { data: row } = await run((await sb()).from('posts').update({
       title: input.title.trim(), body: input.body || '', pinned: !!input.pinned, status: input.status,
       // 처음 게시한 시각은 유지(임시저장 → 게시로 바꿀 때만 기록)
       published_at: cur.published_at || (input.status === 'published' ? new Date().toISOString() : null),
     }).eq('id', id).select().single())
+    await savePostImages(cur.id, images)
     return { ...row, images: await imagesOf(row.id) }
   },
   async remove(id) {
     const imgs = await imagesOf(id)
-    await run((await sb()).from('posts').delete().eq('id', id)) // post_images 행은 함께 삭제(외래 키 cascade)
-    if (imgs.length) await (await sb()).storage.from(BUCKET).remove(imgs.flatMap((i) => [i.path, i.thumb_path]))
+    // 파일 먼저(실패하면 글이 남아 다시 지울 수 있음). post_images 행은 글과 함께 삭제(외래 키 cascade)
+    await removeFiles((await sb()).storage.from(BUCKET), imgs.flatMap((i) => [i.path, i.thumb_path]))
+    await run((await sb()).from('posts').delete().eq('id', id))
     return true
   },
 }

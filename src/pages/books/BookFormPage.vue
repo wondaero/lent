@@ -5,6 +5,7 @@ import { books, loans } from '@/api'
 import { BOOK_STATUS, HOLD_REASONS } from '@/lib/constants'
 import { callNumberLines, dueOf, fmtDate, fmtDateTime, overdueDays } from '@/lib/format'
 import { makeAuthorMark } from '@/lib/callNumber'
+import { useLeaveGuard } from '@/lib/useLeaveGuard'
 import { fmtRegNo, normalizeRegNo, parseRegNo } from '@/lib/regNo'
 import KdcTag from '@/components/KdcTag.vue'
 import { toast } from '@/stores/toast'
@@ -19,6 +20,8 @@ const empty = () => ({
 })
 const form = reactive(empty())
 const meta = ref(null)
+// 저장하지 않고 다른 메뉴로 가면 확인(입력한 서지가 말없이 사라지지 않게)
+const guard = useLeaveGuard(() => form)
 
 // 대출 이력(책 입장): 이 책을 누가 언제 빌렸는지. 회원 화면의 대출 이력과 같은 모양
 const history = shallowRef([])
@@ -64,6 +67,7 @@ onMounted(async () => {
     if (isEdit.value) {
       const b = await books.get(props.id)
       Object.keys(form).forEach((k) => (form[k] = b[k] ?? ''))
+      guard.snapshot()
       meta.value = { created_at: b.created_at, spine_label_printed: b.spine_label_printed, loan: b.loan ?? null }
       loadHistory()
     } else {
@@ -173,9 +177,11 @@ async function save() {
     const data = { ...form, reg_no: normalizeRegNo(form.reg_no), title: form.title.trim() }
     if (isEdit.value) {
       await books.update(props.id, data)
+      guard.snapshot()
       toast('저장했습니다.')
     } else {
       const row = await books.create(data)
+      guard.skip()
       toast('도서를 등록했습니다.')
       router.replace(`/books/${row.id}`)
     }
@@ -196,6 +202,7 @@ async function saveAndNew() {
     // 같은 책 복본/다음 권 연속 등록을 위해 서지는 유지. 등록번호는 다음 책의 바코드를 스캔
     const keep = { series_title: form.series_title, author: form.author, publisher: form.publisher, pub_year: form.pub_year, class_no: form.class_no, author_mark: form.author_mark }
     Object.assign(form, empty(), keep)
+    guard.snapshot()   // 남겨 둔 서지만 있는 상태는 "작성 중"으로 보지 않음
     await newEntry()
   } catch (e) {
     toast.error(e)
@@ -208,6 +215,7 @@ async function remove() {
   if (!confirm(`"${form.title}" 도서를 삭제하시겠습니까?`)) return
   try {
     await books.remove(props.id)
+    guard.skip()
     toast('삭제했습니다.')
     router.replace('/books')
   } catch (e) {
@@ -385,8 +393,8 @@ const preview = computed(() => callNumberLines(form))
         <tbody>
           <tr v-for="l in history" :key="l.id">
             <td class="title-cell">
-              <router-link v-if="l.member" :to="`/members/${l.member.id}`" class="cell-link">{{ l.member.name }}</router-link>
-              <template v-else>(삭제된 회원)</template>
+              <router-link v-if="l.member && !l.member.deleted" :to="`/members/${l.member.id}`" class="cell-link">{{ l.member.name }}</router-link>
+              <template v-else>{{ l.member?.name ?? '(삭제된 회원)' }}</template>
               <span class="sub num">{{ l.member?.phone }} · {{ l.member?.member_no }}</span>
               <span v-if="l.loan_memo" class="sub memo">대출 메모: {{ l.loan_memo }}</span>
               <span v-if="l.return_memo" class="sub memo">반납 메모: {{ l.return_memo }}</span>

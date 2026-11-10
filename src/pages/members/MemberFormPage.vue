@@ -48,11 +48,15 @@ function rangeDates() {
   return { from: fmtDate(d) }
 }
 
+let historySeq = 0
 async function loadHistory() {
+  const seq = ++historySeq   // 기간 탭을 빠르게 바꿨을 때 늦게 온 응답은 버림
   historyLoading.value = true
-  try { history.value = await loans.byMember(props.id, rangeDates()) }
-  catch (e) { toast.error(e) }
-  finally { historyLoading.value = false }
+  try {
+    const rows = await loans.byMember(props.id, rangeDates())
+    if (seq === historySeq) history.value = rows
+  } catch (e) { if (seq === historySeq) toast.error(e) }
+  finally { if (seq === historySeq) historyLoading.value = false }
 }
 watch([range, customFrom, customTo], () => isEdit.value && loadHistory())
 

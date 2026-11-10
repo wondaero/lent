@@ -34,7 +34,8 @@ function decompose(ch) {
   return { cho: CHO[Math.floor(code / 588)], jung: JUNG[Math.floor((code % 588) / 28)] }
 }
 function cleanName(s) {
-  let v = (s || '').replace(/\s/g, '')
+  // 앞에 붙은 따옴표·괄호 등(「해리 포터」, "…")은 떼고 시작
+  let v = (s || '').replace(/\s/g, '').replace(/^[^가-힣A-Za-z0-9(]+/, '')
   const i = v.indexOf(')')
   if (i !== -1 && i + 2 < v.length) v = v.slice(i + 1)
   return v
@@ -54,11 +55,15 @@ export function ljcMark(name) {
 //   "글undefinedundefinedㅍ" 같은 깨진 기호를 저장했다(2026-11-08 실제 데이터 4권). 기호는 앞 두 글자만 쓰므로
 //   이름이 앞에 오는 보통의 경우("나관중 지음")는 결과가 바뀌지 않는다.
 const ROLE = '(?:글|그림|그린이|글쓴이|지음|지은이|저|편|엮음|편저|편역|역|옮김|옮긴이|번역|사진|원작|감수|기획|만화|각색|구성|글그림)'
+// 콜론 없이 앞에 붙은 역할("그림 이수지", "글 이금이"): 역할 뒤에 띄어쓰기가 있을 때만 뗀다.
+// "편"은 성씨(편혜영 → "편 혜영")와 헷갈려서 앞쪽에서는 떼지 않는다
+const LEAD_ROLE = new RegExp(`^\\s*${ROLE.replace('|편|', '|')}(?:\\s*[·・/]\\s*${ROLE})*\\s+(?=\\S)`)
 export function mainAuthor(author) {
   // 쉼표·세미콜론으로 나눈 사람 중 역할 표기를 떼고 처음으로 이름이 남는 사람("기획 구성,이경택" → "이경택")
   const roleOnly = new RegExp(`^(?:\\s*[·・/]?\\s*${ROLE})+$`)
   for (const part of String(author || '').split(/[;,]/)) {
     let v = part.replace(/^[^:：]{1,12}[:：]\s*/, '')                                   // 앞 역할 "글·그림: "
+    v = v.replace(LEAD_ROLE, '')                                                         // 콜론 없는 앞 역할 "그림 이수지"
     v = v.replace(new RegExp(`(?:\\s*[·・/]?\\s*${ROLE})+\\s*$`), '').trim()            // 뒤 역할 " 지음", " 글·그림"
     if (v && !roleOnly.test(v.replace(/\s/g, ''))) return v
   }
@@ -72,8 +77,9 @@ export function makeAuthorMark({ title = '', seriesTitle = '', author = '', kore
   let mark = ljcMark(korean.trim() || base)
   if (!mark) return { needKorean: true, base }
   if (!series) {
-    const t = title.trim()[0]
-    if (t) mark += isSyllable(t) ? decompose(t).cho : t   // 영문 등은 예전 코드처럼 글자 그대로
+    // 서명 첫 "글자"(숫자·기호는 건너뜀): "82년생 김지영" → 년 → ㄴ. 숫자를 붙이면 기호의 숫자부와 섞여 깨진다(조1928)
+    const t = title.match(/[가-힣A-Za-z]/)?.[0]
+    if (t) mark += isSyllable(t) ? decompose(t).cho : t   // 영문은 예전 코드처럼 글자 그대로
   }
   return { mark }
 }
@@ -95,9 +101,13 @@ const RE = {
   copy: /(?<![A-Za-z])c\.?\s*(\d+)(?!\d)/i,
   // 분류기호: 정수부 3자리 + 선택 소수부. 앞에 숫자/글자가 붙거나 뒤에 숫자가 이어지면 제외
   // (ISBN·연도·등록번호·저자기호 숫자부 오인식 방지)
-  classNo: /(?<![\d.A-Za-z가-힣])(\d{3}(?:\.\d+)?)(?![\d.])/,
-  // 저자기호: 문자1 + 숫자 + 선택 초성. 앞뒤에 글자가 붙어 있으면 제외("이야기2" 같은 서명 오인식 방지)
-  authorMark: /(?<![가-힣A-Za-z])([가-힣A-Za-z]\d{1,4}[ㄱ-ㅎ가-힣A-Za-z]?)(?![\d가-힣A-Za-z])/,
+  // 하이픈으로 이어진 숫자(ISBN 978-89-…)와 뒤에 낱말이 붙은 숫자("100장면")도 제외.
+  // 뒤에 글자가 붙어도 저자기호(글자+숫자, "813.6마83ㄷ")면 허용
+  classNo: /(?<![\d.A-Za-z가-힣-])(\d{3}(?:\.\d+)?)(?![\d.-])(?![가-힣A-Za-z](?!\d))/,
+  // 저자기호: 한글1 + 숫자 + 선택 초성. 앞뒤에 글자가 붙어 있으면 제외("이야기2" 같은 서명 오인식 방지)
+  authorMark: /(?<![가-힣A-Za-z])([가-힣]\d{1,4}[ㄱ-ㅎ가-힣A-Za-z]?)(?![\d가-힣A-Za-z])/,
+  // 영문 저자기호(S123)는 분류기호와 함께 쳤을 때만: 혼자면 "B612", "K2" 같은 서명일 가능성이 큼
+  authorMarkLatin: /(?<![가-힣A-Za-z])([A-Za-z]\d{1,4}[A-Za-z]?)(?![\d가-힣A-Za-z])/,
 }
 
 export function parseCallQuery(input) {
@@ -114,6 +124,7 @@ export function parseCallQuery(input) {
   take(RE.copy, 'copy')
   take(RE.classNo, 'classNo')
   take(RE.authorMark, 'authorMark', normalizeAuthorMark)
+  if (q.classNo && !q.authorMark) take(RE.authorMarkLatin, 'authorMark', normalizeAuthorMark)
   q.rest = s.replace(/\s+/g, ' ').trim()
   return q
 }

@@ -88,7 +88,7 @@
 | 옛 컬럼 | 새 컬럼 | 규칙 |
 |---|---|---|
 | `book_cde` | `reg_no` | 아래 "등록번호 정리 규칙" |
-| `author_cde` | `author_mark` | |
+| `author_cde` | `author_mark` | 앱과 같은 `normalizeAuthorMark`(끝 글자 `다` → `ㄷ`, 2026-11-10 추가: 안 하면 `마83다`로 검색해도 못 찾음). 바뀐 건수는 보고서 숫자로 |
 | `author_cde_chk` | `spine_label_printed` | `y` → true |
 | `isbn` | `isbn` | 공백·탭·하이픈 제거. 비면 `isbn2`의 `:` 앞부분 |
 | `series_title`, `title` | 그대로 | 앞뒤 공백, 끝의 `.` 제거 |
@@ -97,7 +97,7 @@
 | `pub_info` | `publisher` | `지명 : 출판사`면 출판사만 |
 | `author_info` | `author` | 원문 유지(`나관중 지음;이문열 옮김`) |
 | `pub_year_info` | `pub_year` | 4자리 연도 추출(`c2015` → 2015), 없으면 빈칸 |
-| `book_sts` | `status` | `rent`·빈 값 → available, `readOnly` → readonly(관내열람), `hold` → hold(대출보류, 옛 데이터에 사유가 없어 `hold_reason` = "기존 보류" → 나중에 화면에서 정리). 지금 대출 중이면 loaned. 처음 보는 값은 available + 보고서 |
+| `book_sts` | `status` | `rent`·빈 값 → available, `readOnly` → readonly(관내열람), `hold` → hold(대출보류, 옛 데이터에 사유가 없어 `hold_reason` = "기존 보류" → 나중에 화면에서 정리). 처음 보는 값은 available + 보고서. **대출중 여부는 실제로 넣는 대출 기록 기준으로 마지막에 맞춘다**(2026-11-10): 미반납 기록이 있으면 loaned, 없으면 loaned가 아님(회원이 없어 뺀 미반납 기록 등은 보고서 "도서 상태"에) |
 | `memo`, `reg_dt` | `memo`, `created_at` | `0000-00-00`이면 이관 시각 |
 | (계산) | `call_sort_key` | 앱의 `callSortKey()`로 계산 |
 | 버림 | | `with_things`(딸림자료, 사용자 결정), `storage_cde`, `book_opt`, `reservation`, `rent_yn`, `isbn2`, `series_no`, `monthly_rent_cnt`, `total_rent_cnt` |

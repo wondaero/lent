@@ -1,5 +1,5 @@
 <script setup>
-import { onActivated, onMounted } from 'vue'
+import { onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { members } from '@/api'
 import { MEMBER_STATUS } from '@/lib/constants'
@@ -37,9 +37,8 @@ async function exportList() {
   ], all)
 }
 
-let mounted = false
-onMounted(() => { load(); mounted = true })
-onActivated(() => { if (mounted) load() })
+// keep-alive: onActivated는 처음 열 때도 실행됨 → 여기서만 불러야 첫 진입에 두 번 조회하지 않음
+onActivated(load)
 </script>
 
 <template>

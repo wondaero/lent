@@ -1,11 +1,23 @@
 <script setup>
 // 인쇄 후 출력물 확인 창. 브라우저는 실제로 출력됐는지 알 수 없어서 사람이 출력물을 보고 답해야 한다.
 // 세 버튼 중 하나를 누르기 전에는 닫히지 않는다(바깥 클릭·Esc 무시, 화면 이동은 각 탭에서 막음)
-defineProps({
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+
+const props = defineProps({
   open: { type: Boolean, default: false },
   cancelLabel: { type: String, default: '인쇄 안 함' },
 })
 const emit = defineEmits(['ok', 'retry', 'cancel'])
+
+// 창이 열려 있는 동안 뒤 화면(#app)을 inert로: Tab으로 뒤쪽 탭 버튼·메뉴에 가서 눌러 창을 우회하던 문제 방지
+// (이 창은 body로 옮겨져 #app 밖에 있으므로 영향 없음)
+const okBtn = ref(null)
+const setInert = (on) => document.getElementById('app')?.toggleAttribute('inert', on)
+watch(() => props.open, (on) => {
+  setInert(on)
+  if (on) nextTick(() => okBtn.value?.focus())
+}, { immediate: true })
+onBeforeUnmount(() => setInert(false))
 </script>
 
 <template>
@@ -23,7 +35,7 @@ const emit = defineEmits(['ok', 'retry', 'cancel'])
           <button type="button" class="btn" @click="emit('cancel')">{{ cancelLabel }}</button>
           <div class="grow" />
           <button type="button" class="btn secondary" @click="emit('retry')">다시 인쇄</button>
-          <button type="button" class="btn primary" @click="emit('ok')">잘 나왔어요</button>
+          <button ref="okBtn" type="button" class="btn primary" @click="emit('ok')">잘 나왔어요</button>
         </div>
       </div>
     </div>

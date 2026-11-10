@@ -1,5 +1,5 @@
 <script setup>
-import { onActivated, onMounted, ref } from 'vue'
+import { onActivated, ref } from 'vue'
 import { loans } from '@/api'
 import { addDays, dueOf, fmtDate, num, overdueDays } from '@/lib/format'
 import { usePagedList } from '@/lib/usePagedList'
@@ -69,9 +69,8 @@ async function exportList() {
   ], all)
 }
 
-let mounted = false
-onMounted(() => { load(); mounted = true })
-onActivated(() => { if (mounted) load() })
+// keep-alive: onActivated는 처음 열 때도 실행됨 → 여기서만 불러야 첫 진입에 두 번 조회하지 않음
+onActivated(load)
 </script>
 
 <template>
@@ -115,8 +114,8 @@ onActivated(() => { if (mounted) load() })
                 <span v-if="l.return_memo" class="sub memo">반납 메모: {{ l.return_memo }}</span>
               </td>
               <td class="nowrap">
-                <router-link v-if="l.member" :to="`/members/${l.member.id}`" class="cell-link">{{ l.member.name }}</router-link>
-                <template v-else>-</template>
+                <router-link v-if="l.member && !l.member.deleted" :to="`/members/${l.member.id}`" class="cell-link">{{ l.member.name }}</router-link>
+                <template v-else>{{ l.member?.name ?? '-' }}</template>
                 <span class="sub num">{{ l.member?.phone }}</span>
               </td>
               <td class="nowrap num">{{ fmtDate(l.loaned_at) }}</td>

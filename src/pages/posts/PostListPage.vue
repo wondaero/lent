@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onActivated, onMounted } from 'vue'
+import { computed, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { posts } from '@/api'
 import { POST_CATEGORY, POST_STATUS } from '@/lib/constants'
@@ -16,9 +16,8 @@ const { filters, page, rows, total, loading, perPage, load } = usePagedList(post
 const withPhotos = computed(() => POST_CATEGORY[filters.category].photos)
 const statusTabs = [{ v: '', label: '전체' }, ...Object.entries(POST_STATUS).map(([v, s]) => ({ v, label: s.label }))]
 
-let mounted = false
-onMounted(() => { load(); mounted = true })
-onActivated(() => { if (mounted) load() })
+// keep-alive: onActivated는 처음 열 때도 실행됨 → 여기서만 불러야 첫 진입에 두 번 조회하지 않음
+onActivated(load)
 </script>
 
 <template>

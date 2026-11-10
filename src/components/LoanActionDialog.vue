@@ -2,7 +2,8 @@
 // 대출 한 건의 반납 / 연장 확인 창. 날짜를 확인·변경한 뒤 확정한다(목록에서 다른 줄을 잘못 누르는 실수 방지)
 import { computed, nextTick, ref, watch } from 'vue'
 import { loans } from '@/api'
-import { addDays, dueOf, fmtDate, lastSaturday, overdueDays } from '@/lib/format'
+import { addDays, dueOf, fmtDate, overdueDays } from '@/lib/format'
+import { useToday } from '@/lib/useToday'
 import { toast } from '@/stores/toast'
 
 const props = defineProps({
@@ -11,21 +12,22 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'done'])
 
-const today = addDays(0)
-const sat = lastSaturday()
-const date = ref(today)
+// 창을 열 때마다 오늘을 다시 계산(대출 기록 화면은 캐시되어 며칠씩 열려 있을 수 있음)
+const { today, saturday: sat, refresh } = useToday()
+const date = ref(today.value)
 const busy = ref(false)
 const dateInput = ref(null)
 
 watch(() => props.loan, (l) => {
   if (!l) return
+  refresh()
   // 연장 기본값 = 오늘 + 회원 대출기간. 고정이 아니라 바꿀 수 있다
-  date.value = props.mode === 'extend' ? addDays(l.member?.loan_days ?? 14) : today
+  date.value = props.mode === 'extend' ? addDays(l.member?.loan_days ?? 14) : today.value
   nextTick(() => dateInput.value?.focus())
 }, { immediate: true })
 
 const late = computed(() => props.loan && props.mode === 'return' ? overdueDays(dueOf(props.loan), date.value) : 0)
-const invalid = computed(() => !date.value || (props.mode === 'extend' ? date.value < today : date.value > today))
+const invalid = computed(() => !date.value || (props.mode === 'extend' ? date.value < today.value : date.value > today.value))
 
 async function submit() {
   if (invalid.value || busy.value) return

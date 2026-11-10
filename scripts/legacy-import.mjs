@@ -10,7 +10,7 @@
 // 컬럼 구성이 예상과 다르면 멈춘다(옛 DB 구조가 바뀐 것 → 규칙 확인 필요).
 import fs from 'node:fs'
 import path from 'node:path'
-import { callSortKey, makeAuthorMark, isAuthorMarkOk } from '../src/lib/callNumber.js'
+import { callSortKey, makeAuthorMark, isAuthorMarkOk, normalizeAuthorMark } from '../src/lib/callNumber.js'
 import { normalizeRegNo, parseRegNo } from '../src/lib/regNo.js'
 
 const DIR = path.resolve(process.argv[2] || 'doc/db')
@@ -166,8 +166,6 @@ const normalized = books.rows.map((b) => {
   return inner ? { b, raw, reg: inner, salvaged: true } : { b, raw, reg: t(raw) }
 })
 const loanedCodes = new Set(history.rows.map((h) => t(h.book_cde)))
-const activeBooks = new Set()
-for (const h of history.rows) if (!t(h.return_dt)) activeBooks.add(t(h.book_cde))
 // 원문이 이미 정확한 번호인 행을 먼저 처리 → 잘못 들어간 쪽(공백·뜨·덧붙음)이 중복으로 밀려난다
 normalized.sort((x, y) => (x.raw === x.reg ? 0 : 1) - (y.raw === y.reg ? 0 : 1))
 for (const { b, raw, reg: wanted, salvaged } of normalized) {
@@ -194,16 +192,14 @@ for (const { b, raw, reg: wanted, salvaged } of normalized) {
   if (parseRegNo(reg) == null) note('도서 등록번호', `형식이 EM+8자리가 아님 "${reg}" → 서가에서 실제 바코드 확인 후 도서 수정: ${t(b.title)}`)
   let status = BOOK_STATUS[t(b.book_sts)]
   if (!status) { note('도서 상태', `처음 보는 상태 "${b.book_sts}" → 대출가능으로: ${reg}`); status = 'available' }
-  if (activeBooks.has(t(raw))) {
-    if (status !== 'available') note('도서 상태', `${reg}: 상태가 "${b.book_sts}"인데 대출 중 → 대출중으로`)
-    status = 'loaned'
-  }
+  // 대출중 여부는 아래에서 "실제로 넣는 대출 기록" 기준으로 다시 맞춘다
   const row = {
     id: bookRows.length + 1, reg_no: reg, isbn: isbn(b.isbn, b.isbn2),
     title: noTrailingDot(b.title) || '(서명 없음)', series_title: noTrailingDot(b.series_title),
     author: t(b.author_info), publisher: orNull(t(b.pub_info).split(':').at(-1)),
     pub_year: t(b.pub_year_info).match(/(1[89]|20)\d{2}/)?.[0] ?? null,
-    class_no: t(b.class_no), author_mark: orNull(b.author_cde),
+    // 저자기호는 앱과 같은 정규화(끝 글자 "다" → "ㄷ"): 안 하면 "마83다"로 검색해도 못 찾음
+    class_no: t(b.class_no), author_mark: orNull(normalizeAuthorMark(t(b.author_cde))),
     volume: orNull(b.claim_no) ?? orNull(b.series_no), copy_no: orNull(b.copy_no),
     status, hold_reason: status === 'hold' ? LEGACY_HOLD_REASON : null,
     spine_label_printed: t(b.author_cde_chk) === 'y', memo: orNull(b.memo),
@@ -214,6 +210,7 @@ for (const { b, raw, reg: wanted, salvaged } of normalized) {
     const s = makeAuthorMark({ title: row.title, seriesTitle: row.series_title || '', author: row.author })
     note('저자기호', `${reg} "${row.author_mark ?? '(없음)'}" 형식이 이상함 → 제안 ${s.mark ?? '(직접 입력)'}: ${row.title}`)
   }
+  if (row.author_mark && row.author_mark !== t(b.author_cde)) report.counts['저자기호 정규화(끝 글자 → 초성)'] = (report.counts['저자기호 정규화(끝 글자 → 초성)'] || 0) + 1
   row.call_sort_key = callSortKey(row)
   bookRows.push(row)
   bookByCode.set(t(raw), row)
@@ -253,6 +250,20 @@ for (const h of [...history.rows].sort((a, b) => +a.rent_history_seq - +b.rent_h
 const openPerBook = new Map()
 for (const l of loanRows) if (!l.returned_at && l.book_id) openPerBook.set(l.book_id, (openPerBook.get(l.book_id) || 0) + 1)
 for (const [id, n] of openPerBook) if (n > 1) throw new Error(`도서 id ${id}가 동시에 ${n}번 대출 중입니다. 옛 데이터를 확인하세요.`)
+// 도서 상태를 실제로 넣는 대출 기록과 맞춘다. 원문 코드만 보고 정하면 어긋난다:
+//   중복으로 뺀 행·번호 보정된 책의 미반납 기록 → 대출 기록은 있는데 책은 "대출가능"(스캔하면 대출로 분류되고 DB 제약에 걸림)
+//   회원이 없어 뺀 미반납 기록 → 대출 기록 없이 영원히 "대출중"
+for (const b of bookRows) {
+  const open = openPerBook.has(b.id)
+  if (open && b.status !== 'loaned') {
+    if (b.status !== 'available') note('도서 상태', `${b.reg_no}: 상태가 "${b.status}"인데 대출 중 → 대출중으로`)
+    b.status = 'loaned'
+    b.hold_reason = null
+  } else if (!open && b.status === 'loaned') {
+    note('도서 상태', `${b.reg_no}: 대출중인데 넣을 대출 기록이 없음(회원 없음 등) → 대출가능으로: ${b.title}`)
+    b.status = 'available'
+  }
+}
 
 /* ───────────── SQL ───────────── */
 const lit = (v) => (v === NOW ? v.raw : v == null ? 'null' : typeof v === 'boolean' || typeof v === 'number' ? String(v) : `'${String(v).replace(/'/g, "''")}'`)

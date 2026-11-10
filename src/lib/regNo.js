@@ -25,7 +25,8 @@ export function hangulToKeys(v) {
 }
 
 // 스캔·입력값 정리: 공백 제거 → 한글 자판으로 들어간 글자 되돌리기 → 대문자
-export const normalizeRegNo = (v) => hangulToKeys(String(v ?? '').trim()).toUpperCase()
+// (중간 공백도 제거: "EM 00004055"처럼 손으로 띄어 친 값)
+export const normalizeRegNo = (v) => hangulToKeys(String(v ?? '').replace(/\s+/g, '')).toUpperCase()
 export const fmtRegNo = (n) => `${REG_PREFIX}${String(n).padStart(REG_DIGITS, '0')}`
 
 // 형식이 맞으면 숫자 부분, 아니면 null

@@ -1,10 +1,11 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import { computed, nextTick, onActivated, onDeactivated, ref, shallowRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { members, loans, books } from '@/api'
 import { MEMBER_STATUS, bookStatusText } from '@/lib/constants'
 import { normalizeRegNo } from '@/lib/regNo'
-import { addDays, dueOf, fmtDate, lastSaturday as lastSat, overdueDays } from '@/lib/format'
+import { addDays, dueOf, fmtDate, overdueDays } from '@/lib/format'
+import { useToday } from '@/lib/useToday'
 import { toast } from '@/stores/toast'
 import KdcTag from '@/components/KdcTag.vue'
 import LoanActionDialog from '@/components/LoanActionDialog.vue'
@@ -13,6 +14,9 @@ import LoanActionDialog from '@/components/LoanActionDialog.vue'
 //   스캔 → 처리 목록(대출 중이면 '반납', 아니면 '대출'로 자동 분류)
 //   → 반납이 있으면 '반납 처리일', 대출이 있으면 '대출할 회원' 칸이 나타남 → 처리하기
 // 반납은 회원 없이 처리(주말 반납함 등), 대출은 한 명씩 처리 후 회원을 자동으로 비움.
+
+// 캐시(keep-alive): 스캔해 둔 목록을 둔 채 회원 화면 등을 보고 돌아와도 목록·소급일·메모가 남게
+defineOptions({ name: 'CirculationPage' })
 
 const route = useRoute()
 const scanInput = ref(null)
@@ -32,9 +36,10 @@ const dueDate = ref(addDays(14))
 const memo = ref('')
 
 // 반납 처리일: 주말 반납함 도서는 월요일에 처리해도 실제 넣은 날로 소급해야 부당한 연체가 안 생김
-const today = addDays(0)
-const returnDate = ref(today)
-const lastSaturday = lastSat()
+const { today, saturday: lastSaturday } = useToday()
+const returnDate = ref(today.value)
+// 켜 둔 채 날짜가 넘어가면 "오늘"로 두었던 처리일도 새 오늘로(직접 고른 소급일은 그대로)
+watch(today, (now, before) => { if (returnDate.value === before) returnDate.value = now })
 const lateOf = (q) => overdueDays(dueOf(q.loan), returnDate.value)
 
 const returns = computed(() => queue.value.filter((q) => q.type === 'return'))
@@ -73,7 +78,9 @@ const problem = computed(() => {
   if (overLimit.value) return `대출 한도 초과 (${afterCount.value} / ${member.value.loan_limit}권)`
   return ''
 })
-const canProcess = computed(() => queue.value.length > 0 && !problem.value && !busy.value)
+// 회원의 대출 목록을 받는 중에는 처리 금지(한도·연체 확인이 빈 목록 기준으로 통과되는 것 방지)
+const memberLoading = ref(false)
+const canProcess = computed(() => queue.value.length > 0 && !problem.value && !busy.value && !memberLoading.value)
 // 대출 쪽 문제로 막혀도 반납은 먼저 처리할 수 있게
 const canReturnOnly = computed(() => !!problem.value && returns.value.length > 0 && !busy.value)
 
@@ -87,6 +94,8 @@ async function scan() {
   if (queue.value.some((q) => q.book.reg_no === normalizeRegNo(c))) return toast('이미 목록에 있는 도서입니다.', 'error')
   try {
     const { book, loan } = await loans.lookup(c)
+    // 조회를 기다리는 사이 같은 책이 한 번 더 스캔됐을 수 있음(스캐너 이중 입력)
+    if (queue.value.some((q) => q.book.id === book.id)) return toast('이미 목록에 있는 도서입니다.', 'error')
     if (loan) {
       queue.value.push({ type: 'return', book, loan })
     } else if (book.status === 'available') {
@@ -108,8 +117,13 @@ function removeItem(item) {
 
 function clearQueue() {
   queue.value = []
+  resetMember()
   focusScan()
 }
+
+// 대출 책이 목록에서 모두 빠지면 회원도 비운다.
+// (숨어 있던 회원이 다음 사람 책을 스캔할 때 다시 나타나 엉뚱한 사람에게 대출되는 것 방지)
+watch(() => lends.value.length, (n, before) => { if (n === 0 && before > 0) resetMember() })
 
 /* ───── 회원 ───── */
 async function searchMember() {
@@ -123,17 +137,38 @@ async function searchMember() {
   } catch (e) { toast.error(e) }
 }
 
+let memberSeq = 0
+async function loadMemberLoans(id) {
+  const seq = ++memberSeq
+  memberLoading.value = true
+  try {
+    const rows = await loans.activeByMember(id)
+    if (seq === memberSeq) memberLoans.value = rows   // 그 사이 다른 회원을 골랐으면 버림
+  } finally {
+    if (seq === memberSeq) memberLoading.value = false
+  }
+}
+
 async function selectMember(m) {
   member.value = m
+  memberLoans.value = []
   memberResults.value = []
   memberKw.value = ''
   showMemberLoans.value = false
   dueDate.value = addDays(m.loan_days)
-  memberLoans.value = await loans.activeByMember(m.id)
+  try {
+    await loadMemberLoans(m.id)
+  } catch (e) {
+    // 대출 목록을 모르면 한도·연체를 확인할 수 없으므로 선택을 취소
+    if (member.value === m) resetMember()
+    toast.error(e)
+  }
   focusScan()
 }
 
 function resetMember() {
+  memberSeq++
+  memberLoading.value = false
   member.value = null
   memberLoans.value = []
   memberResults.value = []
@@ -151,8 +186,9 @@ function closeExtend() {
   focusScan()
 }
 async function onExtended() {
-  memberLoans.value = await loans.activeByMember(member.value.id)
   closeExtend()
+  if (!member.value) return
+  try { await loadMemberLoans(member.value.id) } catch (e) { toast.error(e) }
 }
 
 /* ───── 처리 ───── */
@@ -163,6 +199,8 @@ async function processQueue(mode = 'all') {
   if (doLend && keptOverdue.value.length && !confirm(`연체 중인 도서가 ${keptOverdue.value.length}권 있습니다. 그래도 대출하시겠습니까?`)) return
   busy.value = true
   const who = member.value
+  // 이번에 보내는 줄만 기억 → 응답을 기다리는 사이 새로 스캔한 책은 목록에 남긴다
+  const sent = new Set([...returns.value, ...(doLend ? lends.value : [])])
   try {
     const r = await loans.process({
       memberId: doLend ? who.id : null,
@@ -174,11 +212,11 @@ async function processQueue(mode = 'all') {
     })
     const parts = [r.returned && `반납 ${r.returned}권`, r.loaned && `${who.name}님 대출 ${r.loaned}권 (~${dueDate.value})`].filter(Boolean)
     toast(`${parts.join(' · ')} 완료`)
-    queue.value = doLend ? [] : lends.value
-    returnDate.value = today   // 소급은 한 번만 적용. 다음 처리부터는 다시 오늘
+    queue.value = queue.value.filter((q) => !sent.has(q))
+    returnDate.value = today.value   // 소급은 한 번만 적용. 다음 처리부터는 다시 오늘
     memo.value = ''
     if (doLend) resetMember()  // 대출은 한 명씩 → 다음 사람 대출이 이전 회원에게 붙는 사고 방지
-    else if (member.value) memberLoans.value = await loans.activeByMember(member.value.id)
+    else if (member.value) await loadMemberLoans(member.value.id)
   } catch (e) {
     toast.error(e)
   } finally {
@@ -216,14 +254,17 @@ function onKey(e) {
   if (extendTarget.value) return
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); processQueue('all') }
 }
-onMounted(async () => {
+// keep-alive라서 다른 화면에 있는 동안에는 단축키를 떼어 둔다(onActivated는 처음 열 때도 실행됨)
+onActivated(async () => {
   window.addEventListener('keydown', onKey)
-  if (route.query.member) {
-    try { await selectMember(await members.get(route.query.member)) } catch (e) { toast.error(e) }
+  // 회원 화면의 [대출하기]로 들어온 경우(?member=) 그 회원을 선택
+  const id = route.query.member
+  if (id && String(member.value?.id) !== String(id)) {
+    try { await selectMember(await members.get(id)) } catch (e) { toast.error(e) }
   }
   focusScan()
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onDeactivated(() => window.removeEventListener('keydown', onKey))
 
 const summary = computed(() => [returns.value.length && `반납 ${returns.value.length}`, lends.value.length && `대출 ${lends.value.length}`].filter(Boolean).join(' · '))
 </script>

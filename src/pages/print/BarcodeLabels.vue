@@ -17,7 +17,7 @@ import LabelSheetFields from './LabelSheetFields.vue'
 import PrintCheckDialog from './PrintCheckDialog.vue'
 import PrintTip from './PrintTip.vue'
 
-const { s, reset, perPage, skip, paginate, startAt, sheetStyle } = useLabelSheet('lent.barcodeLabelSettings', {
+const { s, v, reset, perPage, skip, paginate, startAt, sheetStyle } = useLabelSheet('lent.barcodeLabelSettings', {
   showLibrary: true,
   cols: 3,
   width: 64,          // mm
@@ -166,7 +166,7 @@ onBeforeRouteLeave(() => {
         >
           <template v-if="code">
             <div v-if="s.showLibrary" class="lib">{{ LIBRARY_NAME }}</div>
-            <Barcode :value="code" class="bars" :style="{ height: `${s.height * 0.42}mm` }" />
+            <Barcode :value="code" class="bars" :style="{ height: `${v.height * 0.42}mm` }" />
             <div class="code num">{{ code }}</div>
           </template>
         </div>

@@ -1,9 +1,9 @@
 <script setup>
-import { computed, onActivated, onMounted, watch } from 'vue'
+import { computed, onActivated, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { books } from '@/api'
 import { BOOK_STATUS, KDC, bookStatusText } from '@/lib/constants'
-import { fmtDate, num, callNumberLines, overdueDays } from '@/lib/format'
+import { addDays, fmtDate, num, callNumberLines, overdueDays } from '@/lib/format'
 import { parseCallQuery, hasCallTokens, classPrefix, isAuthorMarkOk } from '@/lib/callNumber'
 import { usePagedList } from '@/lib/usePagedList'
 import SearchBox from '@/components/SearchBox.vue'
@@ -15,7 +15,30 @@ import { exportXlsx, fetchAll } from '@/lib/exportXlsx'
 defineOptions({ name: 'BookListPage' })
 
 const router = useRouter()
-const { filters, page, rows, total, loading, perPage, load } = usePagedList(books.list, { keyword: '', status: '', category: '', sort: 'recent' })
+const { filters, page, rows, total, loading, perPage, load } = usePagedList(books.list, { keyword: '', status: '', category: '', sort: 'recent', from: '', to: '' })
+
+// 등록일 기간(사용자 결정): 최근 1주·1달은 오늘부터 거꾸로(11-10이면 11-04~, 10-11~), 1년은 올해 1월 1일부터.
+// 처음엔 전체: 도서 목록은 주로 서명·청구기호로 책을 찾는 화면이라 기간이 걸려 있으면 "책이 없다"고 착각하기 쉬움.
+// 엑셀 내보내기도 같은 기간을 따른다(현재 검색·필터 결과 전체)
+const periods = [['all', '전체'], ['week', '최근 1주'], ['month', '최근 1달'], ['year', '올해'], ['custom', '기간']]
+const period = ref('all')
+function presetRange(p) {
+  const today = addDays(0)
+  if (p === 'week') return { from: addDays(-6), to: today }
+  if (p === 'month') {
+    // 한 달 전 같은 날의 다음 날(11-10 → 10-11). 한 달 전에 그날이 없으면 그 달 말일 기준(03-31 → 02-28의 다음 날 = 03-01)
+    const n = new Date()
+    const d = new Date(n.getFullYear(), n.getMonth() - 1, Math.min(n.getDate(), new Date(n.getFullYear(), n.getMonth(), 0).getDate()) + 1)
+    return { from: fmtDate(d), to: today }
+  }
+  if (p === 'year') return { from: `${new Date().getFullYear()}-01-01`, to: today }
+  return { from: '', to: '' }
+}
+function setPeriod(p) {
+  period.value = p
+  if (p !== 'custom') Object.assign(filters, presetRange(p))
+  else if (!filters.from) Object.assign(filters, presetRange('month'))
+}
 
 // 검색어 해석 결과를 보여줘서 "어떻게 찾고 있는지" 확인 가능하게
 const parsed = computed(() => parseCallQuery(filters.keyword))
@@ -40,7 +63,9 @@ watch(() => hasCallTokens(parsed.value), (isCall) => {
 
 async function exportList() {
   const all = await fetchAll(books.list, filters)
-  await exportXlsx('도서목록', [
+  // 기간을 걸었으면 파일 이름에 등록일 범위를 남긴다(예: 도서목록_등록일_2026-10-11~2026-11-10_내보낸날.xlsx)
+  const range = filters.from || filters.to ? `_등록일_${filters.from || '처음'}~${filters.to || '오늘'}` : ''
+  await exportXlsx(`도서목록${range}`, [
     { header: '등록번호', value: (b) => b.reg_no, width: 11 },
     { header: '청구기호', value: (b) => callNumberLines(b).join(' '), width: 18 },
     { header: '서명', value: (b) => b.title, width: 30 },
@@ -56,10 +81,15 @@ async function exportList() {
   ], all)
 }
 
-let mounted = false
-onMounted(() => { load(); mounted = true })
-// 캐시된 화면으로 돌아왔을 때 수정/삭제 결과 반영
-onActivated(() => { if (mounted) load() })
+// keep-alive: onActivated는 처음 열 때도 실행됨 → 여기서만 불러야 첫 진입에 두 번 조회하지 않음
+// 캐시된 화면으로 돌아왔을 때 수정/삭제 결과 반영.
+// 빠른 선택(최근 1주 등)은 돌아온 날 기준으로 다시 계산(날짜가 바뀌었으면 filters 변경 → 자동 재조회)
+onActivated(() => {
+  if (period.value === 'all' || period.value === 'custom') return load()
+  const r = presetRange(period.value)
+  if (r.from !== filters.from || r.to !== filters.to) Object.assign(filters, r)
+  else load()
+})
 </script>
 
 <template>
@@ -76,6 +106,18 @@ onActivated(() => { if (mounted) load() })
       </select>
       <div class="grow" />
       <router-link to="/books/new" class="btn primary">+ 도서 등록</router-link>
+    </div>
+    <div class="toolbar">
+      <span class="period-label">등록일</span>
+      <div class="seg" role="group" aria-label="등록일 기간">
+        <button v-for="p in periods" :key="p[0]" :class="{ on: period === p[0] }" @click="setPeriod(p[0])">{{ p[1] }}</button>
+      </div>
+      <template v-if="period === 'custom'">
+        <input v-model="filters.from" type="date" class="input date" aria-label="시작일" />
+        <span class="muted">~</span>
+        <input v-model="filters.to" type="date" class="input date" aria-label="종료일" />
+      </template>
+      <span v-else-if="period !== 'all'" class="muted num range">{{ filters.from }} ~ {{ filters.to }}</span>
     </div>
 
     <div v-if="chips.length" class="parsed">
@@ -144,6 +186,9 @@ onActivated(() => { if (mounted) load() })
 
 <style scoped>
 .head-right { display: flex; align-items: center; gap: 8px; }
+.date { width: 150px; }
+.period-label { font-size: 13px; font-weight: 600; color: var(--text-2); }
+.range { font-size: 13px; }
 .w-auto { width: auto; }
 .sort { width: auto; height: 32px; font-size: 13.5px; }
 .parsed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 12px; font-size: 13px; }

@@ -40,7 +40,8 @@ export const books = {
   // sort: 'recent'(최신 등록) | 'call'(청구기호 = 서가 순서) | 'title'
   // keyword는 청구기호 요소를 패턴으로 분리하고 나머지는 일반 키워드로 검색.
   // Supabase: class_no LIKE 'prefix%' AND author_mark ILIKE 'mark%' ... ORDER BY call_sort_key
-  async list({ page = 1, perPage = 20, keyword = '', status = '', label = '', category = '', sort = 'recent' } = {}) {
+  // from/to(YYYY-MM-DD, to 포함) = 등록일 기간
+  async list({ page = 1, perPage = 20, keyword = '', status = '', label = '', category = '', sort = 'recent', from = '', to = '' } = {}) {
     // 등록번호는 한글 자판으로 찍힌 값("뜨00004055")도 찾는다. 청구기호 해석 전에 변환해야 저자기호로 오인하지 않음
     const asReg = normalizeRegNo(keyword)
     const q = parseCallQuery(parseRegNo(asReg) != null ? asReg : keyword)
@@ -51,6 +52,11 @@ export const books = {
     if (status) rows = rows.filter((b) => b.status === status)
     if (label === 'unprinted') rows = rows.filter((b) => !b.spine_label_printed)
     if (category !== '') rows = rows.filter((b) => b.class_no[0] === String(category))
+    if (from || to) {
+      const f = from ? new Date(`${from}T00:00:00`).getTime() : -Infinity
+      const t = to ? new Date(`${to}T00:00:00`).getTime() + DAY : Infinity
+      rows = rows.filter((b) => { const at = new Date(b.created_at).getTime(); return at >= f && at < t })
+    }
     const cmp = {
       recent: (a, b) => b.id - a.id,
       call: (a, b) => (a.call_sort_key < b.call_sort_key ? -1 : a.call_sort_key > b.call_sort_key ? 1 : a.id - b.id),
@@ -122,6 +128,11 @@ export const books = {
       if (parseRegNo(data.reg_no) == null) return fail('등록번호 형식이 올바르지 않습니다. (예: EM00005724)')
       if (db.books.some((x) => x.reg_no === data.reg_no && x.id !== b.id)) return fail('이미 사용 중인 등록번호입니다.')
     }
+    // '대출중'은 대출/반납 처리만 바꾼다(remote.js·DB 트리거와 같은 규칙): 수정 화면의 옛 status로 덮어쓰지 않게
+    if (data.status != null && (data.status === 'loaned' || b.status === 'loaned')) {
+      const { status, hold_reason, ...rest } = data
+      data = rest
+    }
     if (data.status != null) {
       data = { ...data, hold_reason: data.status === 'hold' ? (data.hold_reason || '').trim() : '' }
       if (data.status === 'hold' && !data.hold_reason) return fail('대출보류 사유를 입력해주세요.')
@@ -188,11 +199,20 @@ function memberStats(memberId) {
   return { active_loans: active, overdue_count: overdue }
 }
 
+// 회원 검색 규칙(remote.js memberKeyword와 같음): 이름·전화 포함, 하이픈 없이 친 전화번호, 회원번호는 정확히 일치
+function memberMatch(m, keyword) {
+  const kw = keyword.trim().toLowerCase()
+  if (has(m.name, kw) || has(m.phone, kw)) return true
+  const digits = kw.replace(/\D/g, '')
+  if (digits && digits === kw.replace(/[\s-]/g, '') && String(m.phone ?? '').replace(/\D/g, '').includes(digits)) return true
+  return /^\d{1,9}$/.test(kw) && m.member_no === +kw
+}
+
 export const members = {
   async list({ page = 1, perPage = 20, keyword = '', status = '' } = {}) {
     const kw = keyword.trim().toLowerCase()
     let rows = db.members.filter((m) => !m.deleted_at)
-    if (kw) rows = rows.filter((m) => has(m.name, kw) || has(m.phone, kw) || has(m.member_no, kw))
+    if (kw) rows = rows.filter((m) => memberMatch(m, kw))
     rows = rows.map((m) => ({ ...m, ...memberStats(m.id) }))
     if (status === 'overdue') rows = rows.filter((m) => m.overdue_count > 0)
     else if (status === 'loaning') rows = rows.filter((m) => m.active_loans > 0)
@@ -204,7 +224,8 @@ export const members = {
     const kw = keyword.trim().toLowerCase()
     if (!kw) return wait([])
     const rows = db.members
-      .filter((m) => !m.deleted_at && (has(m.name, kw) || has(m.phone, kw) || String(m.member_no) === kw))
+      .filter((m) => !m.deleted_at && memberMatch(m, kw))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
       .slice(0, 30)
       .map((m) => ({ ...m, ...memberStats(m.id) }))
     return wait(rows)
@@ -246,7 +267,10 @@ function withJoin(l) {
     // 책이 삭제됐으면 대출 때 저장해 둔 등록번호·서명으로 보여준다(대출 기록은 지우지 않음)
     book: b ? { id: b.id, reg_no: b.reg_no, title: b.title, author: b.author, class_no: b.class_no, author_mark: b.author_mark }
       : { id: null, deleted: true, reg_no: l.book_reg_no, title: l.book_title ? `${l.book_title} (삭제된 도서)` : '(삭제된 도서)', author: '', class_no: '', author_mark: '' },
-    member: m ? { id: m.id, name: m.name, phone: m.phone, member_no: m.member_no, loan_days: m.loan_days } : null,
+    // 삭제된 회원(soft delete)은 링크 없이 글자만 보이도록 deleted 표시(DB loan_list와 같은 모양)
+    member: !m ? null
+      : m.deleted_at ? { id: m.id, deleted: true, name: `${m.name} (삭제된 회원)`, phone: m.phone, member_no: m.member_no, loan_days: m.loan_days }
+      : { id: m.id, name: m.name, phone: m.phone, member_no: m.member_no, loan_days: m.loan_days },
   }
 }
 
@@ -269,8 +293,8 @@ export const loans = {
     return wait(paginate(rows, page, perPage))
   },
   async byMember(memberId, { from, to } = {}) {
-    const f = from ? new Date(from).getTime() : 0
-    const t = to ? new Date(to).getTime() + DAY : Infinity
+    const f = from ? new Date(`${from}T00:00:00`).getTime() : 0
+    const t = to ? new Date(`${to}T00:00:00`).getTime() + DAY : Infinity
     const rows = db.loans
       .filter((l) => l.member_id === +memberId)
       .filter((l) => { const x = new Date(l.loaned_at).getTime(); return x >= f && x < t })
@@ -311,6 +335,7 @@ export const loans = {
       if (m.status !== 'active') return fail('대출이 정지된 회원입니다.')
       const freed = returning.filter((l) => l.member_id === m.id).length
       if (memberStats(m.id).active_loans - freed + bookIds.length > m.loan_limit) return fail(`대출 한도(${m.loan_limit}권)를 초과합니다.`)
+      if (new Set(bookIds).size !== bookIds.length) return fail('같은 도서가 두 번 들어 있습니다.')
       targets = bookIds.map(bookById)
       const bad = targets.find((b) => !b || b.status !== 'available')
       if (bad) return fail(`"${bad?.title ?? '알 수 없음'}"은(는) 대출할 수 없는 상태입니다.`)
@@ -319,7 +344,7 @@ export const loans = {
     const at = nowIso()
     let retAt = at
     if (returnDate && returnDate !== fmtDate(new Date())) {
-      if (new Date(returnDate) > new Date()) return fail('반납 처리일은 미래일 수 없습니다.')
+      if (returnDate > fmtDate(new Date())) return fail('반납 처리일은 미래일 수 없습니다.')
       retAt = new Date(`${returnDate}T12:00:00`).toISOString()
     }
     for (const l of returning) {
@@ -331,7 +356,7 @@ export const loans = {
     }
     for (const b of targets) {
       b.status = 'loaned'
-      db.loans.push({ id: nextId.loans++, book_id: b.id, book_reg_no: b.reg_no, book_title: b.title, member_id: m.id, loaned_at: at, due_at: new Date(dueAt).toISOString(), extended_due_at: null, returned_at: null, loan_memo: note, return_memo: null })
+      db.loans.push({ id: nextId.loans++, book_id: b.id, book_reg_no: b.reg_no, book_title: b.title, member_id: m.id, loaned_at: at, due_at: new Date(`${dueAt}T00:00:00`).toISOString(), extended_due_at: null, returned_at: null, loan_memo: note, return_memo: null })
     }
     return wait({ returned: returning.length, loaned: targets.length })
   },
@@ -340,7 +365,7 @@ export const loans = {
     const l = db.loans.find((x) => x.id === loanId)
     if (!l || l.returned_at) return fail('연장할 수 없는 대출입니다.')
     if (!dueAt || dueAt < fmtDate(new Date())) return fail('연장 반납일은 오늘 이후여야 합니다.')
-    l.extended_due_at = new Date(dueAt).toISOString()
+    l.extended_due_at = new Date(`${dueAt}T00:00:00`).toISOString()
     return wait(withJoin(l))
   },
 }

@@ -61,7 +61,8 @@ async function onLogout() {
       <main class="content">
         <!-- 목록 페이지는 캐시해서 상세 → 목록 복귀 시 검색조건/페이지 유지 -->
         <router-view v-slot="{ Component }">
-          <keep-alive :include="['BookListPage', 'MemberListPage', 'LoanListPage', 'PostListPage']">
+          <!-- 대출/반납도 캐시: 스캔해 둔 처리 목록을 둔 채 회원 화면을 보고 돌아와도 남게 -->
+          <keep-alive :include="['CirculationPage', 'BookListPage', 'MemberListPage', 'LoanListPage', 'PostListPage']">
             <component :is="Component" :key="route.path" />
           </keep-alive>
         </router-view>

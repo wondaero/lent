@@ -13,16 +13,11 @@ const overdue = shallowRef([])
 
 const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim()
 
-onMounted(async () => {
-  try {
-    const [s, o] = await Promise.all([
-      stats.dashboard(),
-      loans.list({ state: 'overdue', perPage: 8 }),
-      loadTrend(),
-    ])
-    summary.value = s
-    overdue.value = o.rows
-  } catch (e) { toast.error(e) }
+// 하나가 실패해도 나머지(통계 카드 등)는 보이게 따로 받는다
+onMounted(() => {
+  stats.dashboard().then((s) => { summary.value = s }).catch(toast.error)
+  loans.list({ state: 'overdue', perPage: 8 }).then((o) => { overdue.value = o.rows }).catch(toast.error)
+  loadTrend().catch(toast.error)
 })
 
 // 대출 순위(사용자 결정): 많이 빌려진 책 + 많이 빌린 회원(이름은 DB에서 가려 옴, 홍*동). 회원 순위는 나중에 뺄 수 있음
@@ -32,13 +27,19 @@ const rankings = shallowRef(null)
 async function loadRankings() {
   const d = new Date()
   const from = rankPeriod.value === 'month' ? addDays(1 - d.getDate()) : rankPeriod.value === 'year' ? `${d.getFullYear()}-01-01` : ''
-  rankings.value = await stats.rankings({ from, limit: 10 })
+  const seq = ++rankSeq
+  const r = await stats.rankings({ from, limit: 10 })
+  if (seq === rankSeq) rankings.value = r   // 기간 탭을 빠르게 바꿨을 때 늦게 온 응답은 버림
 }
+let rankSeq = 0
 watch(rankPeriod, () => loadRankings().catch(toast.error))
 onMounted(() => loadRankings().catch(toast.error))
 
+let trendSeq = 0
 async function loadTrend() {
-  trend.value = await stats.loanTrend(unit.value)
+  const seq = ++trendSeq
+  const t = await stats.loanTrend(unit.value)
+  if (seq === trendSeq) trend.value = t   // 일/주/월을 빠르게 바꿨을 때 늦게 온 응답은 버림
 }
 watch(unit, () => loadTrend().catch(toast.error))
 
@@ -183,7 +184,8 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
                 <span class="sub">{{ l.book?.reg_no }}</span>
               </td>
               <td class="nowrap">
-                <router-link v-if="l.member" :to="`/members/${l.member.id}`" class="cell-link">{{ l.member.name }}</router-link>
+                <router-link v-if="l.member && !l.member.deleted" :to="`/members/${l.member.id}`" class="cell-link">{{ l.member.name }}</router-link>
+                <template v-else>{{ l.member?.name ?? '-' }}</template>
                 <span class="sub">{{ l.member?.phone }}</span>
               </td>
               <td class="nowrap num">{{ fmtDate(l.loaned_at) }}</td>

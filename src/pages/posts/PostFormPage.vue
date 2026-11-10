@@ -5,6 +5,7 @@ import { posts } from '@/api'
 import { POST_CATEGORY, POST_STATUS } from '@/lib/constants'
 import { fmtDateTime } from '@/lib/format'
 import { toast } from '@/stores/toast'
+import { useLeaveGuard } from '@/lib/useLeaveGuard'
 import PostPhotos from './PostPhotos.vue'
 
 const props = defineProps({ id: String })
@@ -24,6 +25,9 @@ const photoBusy = ref(false)
 
 const cat = computed(() => POST_CATEGORY[form.category])
 
+// 저장하지 않고 나가면 확인(줄여 둔 새 사진까지 말없이 사라지지 않게). 사진은 순서·추가·삭제만 비교
+const guard = useLeaveGuard(() => ({ ...form, photos: photos.value.map((p) => p.id ?? p.url) }))
+
 onMounted(async () => {
   if (!isEdit.value) return
   try {
@@ -31,6 +35,7 @@ onMounted(async () => {
     Object.keys(form).forEach((k) => (form[k] = p[k]))
     photos.value = p.images
     meta.value = p
+    guard.snapshot()
   } catch (e) {
     toast.error(e)
     router.replace('/posts')
@@ -60,9 +65,11 @@ async function save() {
       photos.value.forEach((x) => x.blob && URL.revokeObjectURL(x.url))
       photos.value = p.images
       meta.value = p
+      guard.snapshot()
       toast('저장했습니다.')
     } else {
       const p = await posts.create(data)
+      guard.skip()
       toast(form.status === 'draft' ? '임시저장했습니다.' : '게시했습니다.')
       router.replace(`/posts/${p.id}`)
     }
@@ -77,6 +84,7 @@ async function remove() {
   if (!confirm(`"${meta.value.title}" 글을 삭제하시겠습니까?${photos.value.length ? ` 사진 ${photos.value.length}장도 함께 삭제됩니다.` : ''}`)) return
   try {
     await posts.remove(props.id)
+    guard.skip()
     toast('삭제했습니다.')
     router.replace('/posts')
   } catch (e) {
