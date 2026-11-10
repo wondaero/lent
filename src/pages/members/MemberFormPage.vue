@@ -235,7 +235,7 @@ function loanState(l) {
 </template>
 
 <style scoped>
-.layout { display: grid; grid-template-columns: 1fr 280px; gap: 18px; align-items: start; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; align-items: start; }
 .side { position: sticky; top: 80px; }
 .actions { display: grid; gap: 8px; }
 .summary { display: grid; gap: 10px; font-size: 14px; }
@@ -246,7 +246,7 @@ function loanState(l) {
 .filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .date { width: 150px; height: 34px; }
 @media (max-width: 900px) {
-  .layout { grid-template-columns: 1fr; }
+  .layout { grid-template-columns: minmax(0, 1fr); }
   .side { position: static; }
 }
 </style>

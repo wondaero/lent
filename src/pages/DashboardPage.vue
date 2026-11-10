@@ -199,9 +199,9 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
 </template>
 
 <style scoped>
-.tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
-@media (max-width: 1280px) { .tiles { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+.tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1280px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .tile { display: grid; gap: 4px; padding: 16px 18px; text-decoration: none; color: var(--text); min-height: 96px; transition: border-color .15s; }
 .tile:hover { border-color: var(--line-strong); }
 .tile .label { font-size: 13px; color: var(--text-3); font-weight: 500; }
@@ -212,11 +212,11 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
 .tile.amber .value { color: var(--amber); }
 .skeleton { background: linear-gradient(90deg, var(--surface) 25%, var(--hover) 50%, var(--surface) 75%); background-size: 200% 100%; animation: sk 1.2s infinite; }
 @keyframes sk { from { background-position: 100% 0; } to { background-position: -100% 0; } }
-.charts { display: grid; grid-template-columns: 3fr 2fr; gap: 18px; }
+.charts { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 18px; }
 .chart-h { height: 320px; }
 .total { font-size: 13px; font-weight: 500; margin-left: 6px; }
-@media (max-width: 1100px) { .charts { grid-template-columns: 1fr; } }
-.ranks { display: grid; grid-template-columns: 3fr 2fr; gap: 0; }
+@media (max-width: 1100px) { .charts { grid-template-columns: minmax(0, 1fr); } }
+.ranks { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0; }
 .ranks > div { padding: 14px 18px 16px; min-width: 0; }
 .ranks > div + div { border-left: 1px solid var(--line); }
 .rank-title { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--text-3); }
@@ -230,5 +230,5 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
 .rank-list .sub { font-size: 12.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank-list .cnt { flex: none; font-size: 14px; }
 .small { padding: 24px 8px; font-size: 13px; }
-@media (max-width: 900px) { .ranks { grid-template-columns: 1fr; } .ranks > div + div { border-left: 0; border-top: 1px solid var(--line); } }
+@media (max-width: 900px) { .ranks { grid-template-columns: minmax(0, 1fr); } .ranks > div + div { border-left: 0; border-top: 1px solid var(--line); } }
 </style>
