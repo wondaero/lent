@@ -66,6 +66,13 @@ cp .env.example .env.local                                           # URL·anon
 - 응답 정리: KDC만 추출(듀이 제외), 저자 역할어 제거("한강 지음" → "한강"), 권차 인식(`(3)`, `.,제3권`), 총서명 괄호 제거
 - KOLIS-NET 데이터에는 엉뚱한 기록이 섞여 올 때가 있음 → 선택 창에서 ISBN이 다르면 빨간색 표시
 
+## 배포 (Vercel)
+
+- GitHub 저장소를 Vercel에 연결(Add New → Project → `lent`). Framework = Vite, 빌드 `npm run build`, 출력 `dist`(자동 인식).
+- **Environment Variables에 `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`**(`.env.local`과 같은 값). 빠뜨리면 빌드가 일부러 실패한다(`vite.config.js`: 값 없이 뜨면 목업 모드로 동작하는 사고 방지). 값을 바꾸면 Redeploy.
+- `vercel.json`: 모든 주소를 `index.html`로(새로고침 404 방지). `public/robots.txt` + `noindex`: 검색엔진 노출 안 함.
+- 이후 `master`에 푸시하면 자동 재배포.
+
 ## 성능 관련 원칙
 - 모든 페이지는 라우트 단위 지연 로딩. Chart.js는 대시보드 청크에만 포함
 - 목록은 서버 페이지네이션(`{ rows, total }`) + 검색 디바운스 + 늦게 온 응답 폐기
