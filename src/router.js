@@ -32,7 +32,8 @@ const routes = [
 const router = createRouter({ history: createWebHistory(), routes })
 
 router.beforeEach((to) => {
-  if (!to.meta.public && !session.user) return { name: 'login', query: { next: to.fullPath } }
+  // 로그인 후 원래 가려던 화면으로 돌아가게 next를 붙인다. 첫 화면은 어차피 기본값이라 생략(주소 깔끔하게)
+  if (!to.meta.public && !session.user) return { name: 'login', query: to.fullPath === '/' ? {} : { next: to.fullPath } }
   if (to.name === 'login' && session.user) return { name: 'dashboard' }
 })
 
