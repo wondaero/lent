@@ -16,6 +16,8 @@ const emit = defineEmits(['ok', 'retry', 'cancel'])
         <div class="body">
           <slot />
           <p class="muted hint">인쇄를 취소했거나 아직 안 나왔다면 [다시 인쇄], 잘못 나왔으면 라벨지를 바꾸고 [다시 인쇄]를 누르세요.</p>
+          <!-- 위치가 밀렸을 때 라벨 설정 숫자부터 고치는 실수를 막으려고 -->
+          <p class="muted hint">위치가 통째로 밀렸다면 라벨 설정을 고치기 전에, 인쇄 창의 <b>여백: 없음</b> · <b>배율: 100%</b>부터 확인하세요.</p>
         </div>
         <div class="foot">
           <button type="button" class="btn" @click="emit('cancel')">{{ cancelLabel }}</button>

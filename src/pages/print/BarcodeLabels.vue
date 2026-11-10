@@ -15,6 +15,7 @@ import { toast } from '@/stores/toast'
 import Barcode from '@/components/Barcode.vue'
 import LabelSheetFields from './LabelSheetFields.vue'
 import PrintCheckDialog from './PrintCheckDialog.vue'
+import PrintTip from './PrintTip.vue'
 
 const { s, reset, perPage, skip, paginate, startAt, sheetStyle } = useLabelSheet('lent.barcodeLabelSettings', {
   showLibrary: true,
@@ -144,6 +145,7 @@ onBeforeRouteLeave(() => {
         <div class="card-body stack">
           <LabelSheetFields :s="s" />
           <label class="check"><input v-model="s.showLibrary" type="checkbox" /> 도서관 이름 표시</label>
+          <PrintTip />
           <button class="btn primary lg" :disabled="!codes.length" @click="print">인쇄 ({{ codes.length }}장 · A4 {{ pages.length }}매)</button>
         </div>
       </section>

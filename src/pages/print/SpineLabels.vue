@@ -8,6 +8,7 @@ import { useLabelSheet, USED, FREE } from '@/lib/useLabelSheet'
 import { toast } from '@/stores/toast'
 import LabelSheetFields from './LabelSheetFields.vue'
 import PrintCheckDialog from './PrintCheckDialog.vue'
+import PrintTip from './PrintTip.vue'
 
 const { s, reset, perPage, skip, paginate, startAt, sheetStyle } = useLabelSheet('lent.labelSettings', {
   type: 'call',       // call: 청구기호 전체 | class: 분류기호 | author: 저자기호
@@ -148,6 +149,7 @@ onBeforeRouteLeave(() => {
           </div>
           <LabelSheetFields :s="s" />
           <label class="check"><input v-model="s.showRegNo" type="checkbox" /> 등록번호 함께 표시</label>
+          <PrintTip />
           <button class="btn primary lg" :disabled="!labels.length" @click="print">인쇄 ({{ labels.length }}장 · A4 {{ pages.length }}매)</button>
         </div>
       </section>
