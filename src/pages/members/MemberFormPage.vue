@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { members, loans } from '@/api'
 import { MEMBER_STATUS } from '@/lib/constants'
-import { addDays, dueOf, fmtDate, fmtDateTime, overdueDays } from '@/lib/format'
+import { addDays, dueOf, fmtDate, fmtDateTime, maskName, overdueDays } from '@/lib/format'
 import { toast } from '@/stores/toast'
 import { exportXlsx } from '@/lib/exportXlsx'
 import ExportButton from '@/components/ExportButton.vue'
@@ -109,7 +109,7 @@ async function remove() {
   try {
     const r = await members.remove(props.id)
     delOpen.value = false
-    toast(r === 'deleted' ? '삭제했습니다.' : '삭제했습니다. 대출 기록에는 이름만 남습니다.')
+    toast(r === 'deleted' ? '삭제했습니다.' : '삭제했습니다. 대출 기록에는 가린 이름만 남습니다.')
     router.replace('/members')
   } catch (e) {
     delOpen.value = false
@@ -254,7 +254,7 @@ function loanState(l) {
         <dt>회원번호</dt><dd class="num">{{ meta?.member_no }}</dd>
         <dt>전화</dt><dd class="num">{{ meta?.phone || '-' }}</dd>
       </dl>
-      <p class="cd-note">되돌릴 수 없습니다. 대출 기록이 없으면 완전히 지우고, 있으면 기록에 "{{ meta?.name }} (삭제된 회원)"으로 남기 위해 이름·회원번호만 남기고 나머지 정보를 지웁니다. 회원번호는 다시 쓰지 않습니다.</p>
+      <p class="cd-note">되돌릴 수 없습니다. 대출 기록이 없으면 완전히 지우고, 있으면 기록에 "{{ maskName(meta?.name) }} (삭제된 회원)"으로만 남고 나머지 정보는 지웁니다. 회원번호는 다시 쓰지 않습니다.</p>
     </ConfirmDialog>
   </div>
 </template>

@@ -252,13 +252,13 @@ export const members = {
     const m = memberById(id)
     if (!m) return fail('회원을 찾을 수 없습니다.')
     if (memberStats(m.id).active_loans > 0) return fail('대출 중인 도서가 있는 회원은 삭제할 수 없습니다.')
-    // DB members_remove와 같은 규칙: 대출 기록이 없으면 완전히 지우고, 있으면 이름·회원번호만 남기고 삭제 표시
+    // DB members_remove와 같은 규칙: 대출 기록이 없으면 완전히 지우고, 있으면 가린 이름(홍*동)·회원번호만 남기고 삭제 표시
     if (!db.loans.some((l) => l.member_id === m.id)) {
       db.settings.member_last_issued_no = Math.max(db.settings.member_last_issued_no ?? 0, m.member_no)
       db.members.splice(db.members.indexOf(m), 1)
       return wait('deleted')
     }
-    Object.assign(m, { deleted_at: nowIso(), phone: null, birth_date: null, gender: null, address: null, memo: null })
+    Object.assign(m, { deleted_at: nowIso(), name: maskName(m.name), phone: null, birth_date: null, gender: null, address: null, memo: null })
     return wait('hidden')
   },
 }
