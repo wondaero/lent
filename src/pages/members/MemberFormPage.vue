@@ -254,7 +254,7 @@ function loanState(l) {
         <dt>회원번호</dt><dd class="num">{{ meta?.member_no }}</dd>
         <dt>전화</dt><dd class="num">{{ meta?.phone || '-' }}</dd>
       </dl>
-      <p class="cd-note">되돌릴 수 없습니다. 대출 기록이 없으면 완전히 지우고, 있으면 기록에 "{{ maskName(meta?.name) }} (삭제된 회원)"으로만 남고 나머지 정보는 지웁니다. 회원번호는 다시 쓰지 않습니다.</p>
+      <p class="cd-note">되돌릴 수 없습니다. 대출 기록이 없으면 완전히 지우고, 있으면 기록에 "{{ maskName(meta?.name) }}(삭제된 회원)"으로만 남고 나머지 정보는 지웁니다. 회원번호는 다시 쓰지 않습니다.</p>
     </ConfirmDialog>
   </div>
 </template>

@@ -272,10 +272,10 @@ function withJoin(l) {
     overdue: isOverdue(l),
     // 책이 삭제됐으면 대출 때 저장해 둔 등록번호·서명으로 보여준다(대출 기록은 지우지 않음)
     book: b ? { id: b.id, reg_no: b.reg_no, title: b.title, author: b.author, class_no: b.class_no, author_mark: b.author_mark }
-      : { id: null, deleted: true, reg_no: l.book_reg_no, title: l.book_title ? `${l.book_title} (삭제된 도서)` : '(삭제된 도서)', author: '', class_no: '', author_mark: '' },
+      : { id: null, deleted: true, reg_no: l.book_reg_no, title: l.book_title ? `${l.book_title}(삭제된 도서)` : '(삭제된 도서)', author: '', class_no: '', author_mark: '' },
     // 삭제된 회원(soft delete)은 링크 없이 글자만 보이도록 deleted 표시(DB loan_list와 같은 모양)
     member: !m ? null
-      : m.deleted_at ? { id: m.id, deleted: true, name: `${m.name} (삭제된 회원)`, phone: m.phone, member_no: m.member_no, loan_days: m.loan_days }
+      : m.deleted_at ? { id: m.id, deleted: true, name: `${m.name}(삭제된 회원)`, phone: m.phone, member_no: m.member_no, loan_days: m.loan_days }
       : { id: m.id, name: m.name, phone: m.phone, member_no: m.member_no, loan_days: m.loan_days },
   }
 }
