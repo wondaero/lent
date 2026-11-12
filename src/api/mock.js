@@ -236,8 +236,8 @@ export const members = {
   },
   async create(data) {
     const id = nextId.members++
-    // 회원번호 = 지금까지의 최대 번호 + 1(삭제된 회원 번호도 다시 쓰지 않음 → 회원카드 번호 겹침 방지)
-    const memberNo = db.members.reduce((mx, m) => Math.max(mx, m.member_no), 0) + 1
+    // 회원번호 = 지금까지 쓴 최대 번호 + 1(완전히 지운 회원 번호도 다시 쓰지 않음 → 회원카드 번호 겹침 방지. DB member_next_no와 같음)
+    const memberNo = db.members.reduce((mx, m) => Math.max(mx, m.member_no), db.settings.member_last_issued_no ?? 0) + 1
     const row = { ...data, id, member_no: memberNo, created_at: nowIso(), deleted_at: null }
     db.members.push(row)
     return wait(row)
@@ -252,8 +252,14 @@ export const members = {
     const m = memberById(id)
     if (!m) return fail('회원을 찾을 수 없습니다.')
     if (memberStats(m.id).active_loans > 0) return fail('대출 중인 도서가 있는 회원은 삭제할 수 없습니다.')
-    m.deleted_at = nowIso()
-    return wait(true)
+    // DB members_remove와 같은 규칙: 대출 기록이 없으면 완전히 지우고, 있으면 이름·회원번호만 남기고 삭제 표시
+    if (!db.loans.some((l) => l.member_id === m.id)) {
+      db.settings.member_last_issued_no = Math.max(db.settings.member_last_issued_no ?? 0, m.member_no)
+      db.members.splice(db.members.indexOf(m), 1)
+      return wait('deleted')
+    }
+    Object.assign(m, { deleted_at: nowIso(), phone: null, birth_date: null, gender: null, address: null, memo: null })
+    return wait('hidden')
   },
 }
 

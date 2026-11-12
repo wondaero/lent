@@ -7,6 +7,7 @@ import { fmtDateTime } from '@/lib/format'
 import { toast } from '@/stores/toast'
 import { useLeaveGuard } from '@/lib/useLeaveGuard'
 import PostPhotos from './PostPhotos.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const props = defineProps({ id: String })
 const route = useRoute()
@@ -80,15 +81,21 @@ async function save() {
   }
 }
 
+const delOpen = ref(false)
+const deleting = ref(false)
 async function remove() {
-  if (!confirm(`"${meta.value.title}" 글을 삭제하시겠습니까?${photos.value.length ? ` 사진 ${photos.value.length}장도 함께 삭제됩니다.` : ''}`)) return
+  deleting.value = true
   try {
     await posts.remove(props.id)
+    delOpen.value = false
     guard.skip()
     toast('삭제했습니다.')
     router.replace('/posts')
   } catch (e) {
+    delOpen.value = false
     toast.error(e)
+  } finally {
+    deleting.value = false
   }
 }
 </script>
@@ -138,10 +145,18 @@ async function remove() {
       </section>
       <div class="actions">
         <button class="btn primary lg" type="submit" :disabled="busy || photoBusy">{{ photoBusy ? '사진 처리 중…' : isEdit ? '저장' : form.status === 'draft' ? '임시저장' : '게시' }}</button>
-        <button v-if="isEdit" class="btn danger lg" type="button" :disabled="busy" @click="remove">삭제</button>
+        <button v-if="isEdit" class="btn danger lg" type="button" :disabled="busy" @click="delOpen = true">삭제</button>
         <router-link to="/posts" class="btn ghost lg">목록</router-link>
       </div>
     </aside>
+
+    <ConfirmDialog :open="delOpen" title="글 삭제" :busy="deleting" @confirm="remove" @cancel="delOpen = false">
+      <dl class="cd-meta">
+        <dt>제목</dt><dd>{{ meta?.title }}</dd>
+        <dt>사진</dt><dd class="num">{{ photos.length ? `${photos.length}장 (함께 삭제)` : '없음' }}</dd>
+      </dl>
+      <p class="cd-note">되돌릴 수 없습니다. 게시된 글이면 메인페이지에서도 바로 사라집니다.</p>
+    </ConfirmDialog>
   </form>
 </template>
 

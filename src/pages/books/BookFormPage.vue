@@ -8,6 +8,7 @@ import { makeAuthorMark } from '@/lib/callNumber'
 import { useLeaveGuard } from '@/lib/useLeaveGuard'
 import { fmtRegNo, normalizeRegNo, parseRegNo } from '@/lib/regNo'
 import KdcTag from '@/components/KdcTag.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { toast } from '@/stores/toast'
 
 const props = defineProps({ id: String })
@@ -211,15 +212,26 @@ async function saveAndNew() {
   }
 }
 
+// 삭제: 대출 중인 책은 확인 창을 띄우지 않고 바로 알린다(최종 검사는 서버에서 한 번 더)
+const delOpen = ref(false)
+const deleting = ref(false)
+function askRemove() {
+  if (meta.value?.loan) return toast('대출 중인 도서는 삭제할 수 없습니다. 먼저 반납 처리해주세요.', 'error')
+  delOpen.value = true
+}
 async function remove() {
-  if (!confirm(`"${form.title}" 도서를 삭제하시겠습니까?`)) return
+  deleting.value = true
   try {
     await books.remove(props.id)
+    delOpen.value = false
     guard.skip()
     toast('삭제했습니다.')
     router.replace('/books')
   } catch (e) {
+    delOpen.value = false
     toast.error(e)
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -341,7 +353,7 @@ const preview = computed(() => callNumberLines(form))
       <div class="actions">
         <button class="btn primary lg" type="submit" :disabled="busy">{{ isEdit ? '저장' : '등록' }}</button>
         <button v-if="!isEdit" class="btn lg secondary" type="button" :disabled="busy" @click="saveAndNew">등록 후 계속</button>
-        <button v-if="isEdit" class="btn danger lg" type="button" @click="remove">삭제</button>
+        <button v-if="isEdit" class="btn danger lg" type="button" @click="askRemove">삭제</button>
         <router-link to="/books" class="btn ghost lg">목록</router-link>
       </div>
     </aside>
@@ -409,6 +421,14 @@ const preview = computed(() => callNumberLines(form))
       <div v-if="!historyLoading && !history.length" class="empty">아직 대출된 적이 없습니다.</div>
     </div>
   </section>
+
+  <ConfirmDialog :open="delOpen" title="도서 삭제" :busy="deleting" @confirm="remove" @cancel="delOpen = false">
+    <dl class="cd-meta">
+      <dt>등록번호</dt><dd class="num">{{ form.reg_no }}</dd>
+      <dt>서명</dt><dd>{{ form.title }}</dd>
+    </dl>
+    <p class="cd-note">되돌릴 수 없습니다. 대출 기록에는 등록번호·서명과 "(삭제된 도서)"로 남습니다.</p>
+  </ConfirmDialog>
   </div>
 </template>
 

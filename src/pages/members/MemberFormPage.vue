@@ -7,6 +7,7 @@ import { addDays, dueOf, fmtDate, fmtDateTime, overdueDays } from '@/lib/format'
 import { toast } from '@/stores/toast'
 import { exportXlsx } from '@/lib/exportXlsx'
 import ExportButton from '@/components/ExportButton.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const props = defineProps({ id: String })
 const router = useRouter()
@@ -96,14 +97,25 @@ async function save() {
   }
 }
 
+// 삭제: 대출 중인 책이 있으면 확인 창을 띄우지 않고 바로 알린다(최종 검사는 서버에서 한 번 더)
+const delOpen = ref(false)
+const deleting = ref(false)
+function askRemove() {
+  if (meta.value?.active_loans > 0) return toast(`대출 중인 도서 ${meta.value.active_loans}권이 있어 삭제할 수 없습니다. 먼저 반납 처리해주세요.`, 'error')
+  delOpen.value = true
+}
 async function remove() {
-  if (!confirm(`"${meta.value.name}" 회원을 삭제하시겠습니까?`)) return
+  deleting.value = true
   try {
-    await members.remove(props.id)
-    toast('삭제했습니다.')
+    const r = await members.remove(props.id)
+    delOpen.value = false
+    toast(r === 'deleted' ? '삭제했습니다.' : '삭제했습니다. 대출 기록에는 이름만 남습니다.')
     router.replace('/members')
   } catch (e) {
+    delOpen.value = false
     toast.error(e)
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -190,7 +202,7 @@ function loanState(l) {
         <div class="actions">
           <button class="btn primary lg" type="submit" :disabled="busy">{{ isEdit ? '저장' : '등록' }}</button>
           <router-link v-if="isEdit" :to="{ path: '/circulation', query: { member: id } }" class="btn lg secondary">대출하기</router-link>
-          <button v-if="isEdit" class="btn danger lg" type="button" @click="remove">삭제</button>
+          <button v-if="isEdit" class="btn danger lg" type="button" @click="askRemove">삭제</button>
           <router-link to="/members" class="btn ghost lg">목록</router-link>
         </div>
       </aside>
@@ -235,6 +247,15 @@ function loanState(l) {
         <div v-if="!historyLoading && !history.length" class="empty">기간 내 대출 이력이 없습니다.</div>
       </div>
     </section>
+
+    <ConfirmDialog :open="delOpen" title="회원 삭제" :busy="deleting" @confirm="remove" @cancel="delOpen = false">
+      <dl class="cd-meta">
+        <dt>이름</dt><dd>{{ meta?.name }}</dd>
+        <dt>회원번호</dt><dd class="num">{{ meta?.member_no }}</dd>
+        <dt>전화</dt><dd class="num">{{ meta?.phone || '-' }}</dd>
+      </dl>
+      <p class="cd-note">되돌릴 수 없습니다. 대출 기록이 없으면 완전히 지우고, 있으면 기록에 "{{ meta?.name }} (삭제된 회원)"으로 남기 위해 이름·회원번호만 남기고 나머지 정보를 지웁니다. 회원번호는 다시 쓰지 않습니다.</p>
+    </ConfirmDialog>
   </div>
 </template>
 

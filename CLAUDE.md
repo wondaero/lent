@@ -39,9 +39,13 @@
   - 테이블: `books`, `members`, `loans`, `posts`, `post_images`, `settings`(키-값), `staff`(직원 명단).
   - **컬럼 이름은 뜻이 바로 보이게**(옛 `mbr_nm`·`book_cde` 같은 줄임말 금지, 사용자 결정). 모든 컬럼에 한국어 `comment on column`을 단다. 헷갈리던 이름은 바꿨다: `label_printed` → `spine_label_printed`(라벨이 두 종류), `birth` → `birth_date`, `barcode_last_no` → `barcode_last_issued_no`.
   - **권한:** `staff`에 있는 로그인 계정만 데이터 접근(`is_staff()`). 회원가입이 실수로 열려 있어도 개인정보가 새지 않게 하려는 것. anon(공개 키)은 아무 권한 없음. 직원 추가 = Auth에서 계정 생성 후 `staff`에 한 줄.
-  - RPC: `loans_process`, `loans_extend`, `barcode_last_issued`, `barcode_issue`, `barcode_release`.
+  - RPC: `loans_process`, `loans_extend`, `barcode_last_issued`, `barcode_issue`, `barcode_release`, `members_remove`, `member_next_no`.
   - **도서 상태 '대출중'은 대출/반납 처리만 바꾼다.** 도서 수정은 대출중이 걸린 status 변경을 보내지 않고(remote·mock), DB 트리거 `books_guard_loaned`가 실제 대출 기록과 안 맞는 변경을 되돌린다(수정 화면을 열어 둔 사이 대출·반납이 일어나 옛 상태로 덮어쓰던 문제).
   - 삭제된 회원은 `loan_list.member`에 `deleted: true`(이름 뒤 "(삭제된 회원)") → 화면은 링크 없이 글자만. 책의 `deleted`와 같은 방식.
+  - **회원 삭제(`members_remove`, 사용자 결정 2026-11-12):** 대출 기록이 **없으면 행을 완전히 지운다.** 있으면 행을 남겨 대출 기록에 "홍길동 (삭제된 회원)"으로 보이게 하고 **이름·회원번호 외 개인정보(전화·생년월일·성별·주소·메모)는 비운다.** 대출 중이면 거부(DB에서 회원 행을 잠그고 검사).
+    - 외래키 `loans.member_id`(on delete restrict)는 그대로 둔다. 기록이 있는 회원은 행이 남아야 이름이 보인다.
+    - 회원 행이 지워지면 트리거 `members_remember_no`가 번호를 `settings.member_last_issued_no`에 남기고, 새 번호는 `member_next_no()`(지운 번호도 다시 쓰지 않음 → 회원카드 번호 겹침 방지).
+  - 삭제 확인은 브라우저 `confirm()` 대신 `ConfirmDialog`(대상 정보 표시, 커서는 [취소]). 회원·도서·게시글 삭제.
   - 게시판 사진: Storage 삭제는 select 정책이 있어야 실제로 지워진다(없으면 오류 없이 무시). 파일을 먼저 지우고 행을 지운다(행만 지워지고 공개 파일이 남지 않게).
 - **관리자 로그인 = Supabase Auth(JWT)** (`src/api/supabase.js`, `auth` in `api/index.js`). 도서관 회원은 로그인하지 않는다.
   - **공용 관리자 계정 1개**, 그만둔 사람이 있어도 비밀번호를 바꾸지 않음(사용자 결정). **동시 로그인 허용, 자동 로그아웃 없음**(사용자 결정) → 세션 제한 기능을 만들지 않는다.

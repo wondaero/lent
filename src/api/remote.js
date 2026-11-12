@@ -219,12 +219,11 @@ export const members = {
     if (!data) throw new Error('회원을 찾을 수 없습니다.')
     return data
   },
-  // 회원번호 = 지금까지의 최대 번호 + 1(삭제된 회원 번호도 다시 쓰지 않음). 두 PC가 동시에 등록해 겹치면 다시 시도
+  // 회원번호 = 지금까지 쓴 최대 번호 + 1(DB member_next_no: 완전히 지운 회원 번호도 다시 쓰지 않음). 두 PC가 동시에 등록해 겹치면 다시 시도
   async create(input) {
     const client = await sb()
     for (let tries = 0; tries < 3; tries++) {
-      const { data: last } = await run(client.from('members').select('member_no').order('member_no', { ascending: false }).limit(1))
-      const memberNo = (last[0]?.member_no ?? 0) + 1
+      const { data: memberNo } = await run(client.rpc('member_next_no'))
       const { data, error } = await client.from('members').insert({ ...pickMember(input), member_no: memberNo }).select().single()
       if (!error) return data
       if (error.code !== '23505') throw toError(error)
@@ -235,12 +234,10 @@ export const members = {
     const { data } = await run((await sb()).from('members').update(pickMember(input)).eq('id', id).select().single())
     return data
   },
-  // 삭제해도 행은 남긴다(deleted_at) → 대출 기록 유지, 회원번호 재사용 안 함
+  // 대출 기록이 없으면 완전히 지우고('deleted'), 있으면 이름·회원번호만 남기고 삭제 표시('hidden'). 대출 중이면 거부(DB RPC)
   async remove(id) {
-    const m = await members.get(id)
-    if (m.active_loans > 0) throw new Error('대출 중인 도서가 있는 회원은 삭제할 수 없습니다.')
-    await run((await sb()).from('members').update({ deleted_at: new Date().toISOString() }).eq('id', id))
-    return true
+    const { data } = await run((await sb()).rpc('members_remove', { p_id: Number(id) }))
+    return data
   },
 }
 
