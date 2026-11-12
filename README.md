@@ -1,11 +1,13 @@
 # 그루터기작은도서관 관리자
 
-Vue 3 + Vite. 현재는 목업 데이터로 동작하며, 추후 Supabase로 교체 예정. (ISBN 서지 조회는 Supabase Edge Function으로 실제 연동 가능)
+Vue 3 + Vite + Supabase(DB·로그인·Storage·Edge Function), Vercel 배포.
+`.env.local`이 있으면 Supabase에 연결하고, 없으면 목업 데이터로 동작한다. 운영 전환 전까지 Supabase 데이터는 시험용.
 
 ```bash
 npm install
-npm run dev       # http://localhost:5173  (.env.local 있으면 Supabase 로그인)
+npm run dev       # http://localhost:5173  (.env.local 있으면 Supabase 로그인, 없으면 목업)
 npm run dev:mock  # Supabase 없이 목업 데이터로 (데모 계정 admin / admin1234)
+npm test          # 청구기호·저자기호·등록번호 규칙 테스트 (node --test, 의존성 없음)
 npm run build
 ```
 
@@ -16,11 +18,16 @@ src/
   api/index.js      데이터 접근 레이어 입구 — 화면은 여기만 호출. 로그인 + 아래 둘 중 하나를 골라 연결
   api/remote.js     Supabase 구현(.env.local 있을 때)
   api/mock.js       목업 구현(.env.local 없을 때, npm run dev:mock) + api/mockDb.js 예시 데이터
-  lib/              포맷 함수, 상수(KDC, 상태값), usePagedList(목록 공통 로직)
+  api/supabase.js   Supabase 클라이언트(동적 import) / trend.js 그래프 구간 / devCatalog.js 개발용 예시 ISBN
+  lib/              청구기호(callNumber), 등록번호(regNo), Code 128, 엑셀 내보내기, 사진 줄이기,
+                    포맷·상수, usePagedList(목록 공통), useLeaveGuard, useToday, useLabelSheet
   stores/           로그인 세션, 토스트
   layouts/          사이드바 레이아웃
-  components/       Pagination, SearchBox, ChartCanvas, ToastHost
-  pages/            로그인, 대시보드, 대출/반납, 도서, 회원, 대출기록, 라벨출력, 설정
+  components/       Pagination, SearchBox, ChartCanvas, ToastHost, KdcTag, Barcode, ExportButton, LoanActionDialog
+  pages/            로그인, 대시보드, 대출/반납, 대출 기록, 도서, 회원, 설정
+  pages/posts/      게시판(공지사항·활동, 사진 묶음)
+  pages/print/      라벨 출력(청구기호 라벨·바코드 라벨, 출력물 확인 창)
+tests/              규칙 테스트(npm test)
 supabase/functions/
   isbn-lookup/      Edge Function: ISBN 서지 조회(KOLIS-NET 프록시)
   _shared/kolis.ts  KOLIS-NET 호출·응답 해석(순수 코드, Node에서도 테스트 가능)
@@ -84,9 +91,11 @@ cp .env.example .env.local                                           # URL·anon
 - 분류기호는 계층 검색(`800` → 8xx 전체, `813` → 813.x), 저자기호는 앞부분 일치, 나머지는 일반 키워드
 - 정렬은 `call_sort_key`(서가 배열 순서) 기준. 저자기호 숫자는 소수식 비교(마8 < 마83 < 마9)
 
-## Supabase 전환 시 메모
+- 규칙을 고치면 `npm test`로 기존 경우가 깨지지 않았는지 확인한다(`tests/callNumber.test.js`)
+
+## Supabase 구현 요약
 - `books.call_sort_key`는 `callSortKey()`와 같은 규칙으로 저장하고 `COLLATE "C"` 인덱스로 정렬
-- `loans.checkout / checkin`은 여러 테이블을 갱신하므로 Postgres 함수(RPC)로 구현
-- `books.lookupIsbn`은 KOLIS-NET 프록시 Edge Function으로 (구현 완료: `supabase/functions/isbn-lookup`)
-- `stats.*`는 집계 view 또는 RPC로
-- 인증은 Supabase Auth로 교체(`api/index.js`의 `auth`)
+- 목록은 view(`book_list`·`member_list`·`loan_list`), 통계는 RPC(`dashboard_stats`·`loan_daily_counts`·`loan_rankings`)
+- 대출/반납은 단일 RPC `loans_process`(트랜잭션), 연장 `loans_extend`, 바코드 번호 `barcode_issue`/`barcode_release`
+- `books.lookupIsbn` = Edge Function `isbn-lookup`(직원 계정만 호출 가능)
+- 로그인 = Supabase Auth(`api/index.js`의 `auth`), 데이터 접근은 `staff` 명단에 있는 계정만(`is_staff()`)

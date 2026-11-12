@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onActivated, onDeactivated, ref, shallowRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { members, loans, books } from '@/api'
+import { members, loans } from '@/api'
 import { MEMBER_STATUS, bookStatusText } from '@/lib/constants'
 import { normalizeRegNo } from '@/lib/regNo'
 import { addDays, dueOf, fmtDate, overdueDays } from '@/lib/format'
@@ -225,30 +225,6 @@ async function processQueue(mode = 'all') {
   }
 }
 
-/* ───── 개발용 샘플 (npm run dev에서만 버튼 노출, Supabase 연동 시 삭제) ───── */
-const isDev = import.meta.env.DEV
-async function fillSample() {
-  try {
-    // 주말 반납함 상황: 여러 회원의 대출 도서(연체 포함) 반납 + 대출 가능 도서 2권
-    const [overdue, active] = await Promise.all([
-      loans.list({ state: 'overdue', perPage: 3 }),
-      loans.list({ state: 'active', perPage: 3, page: 2 }),
-    ])
-    // 한 회원이 여러 권 반납하는 경우도 보이도록 첫 연체 회원의 다른 대출 도서도 포함
-    const first = overdue.rows[0]?.member
-    const more = first ? (await loans.activeByMember(first.id)).slice(0, 2) : []
-    const rets = [...overdue.rows, ...more, ...active.rows].map((l) => l.book?.reg_no).filter(Boolean)
-    if (!rets.length) return toast('샘플로 쓸 대출 기록이 없습니다.', 'error')
-    queue.value = []
-    resetMember()
-    const avail = await books.list({ status: 'available', perPage: 2, sort: 'call', category: '8' })
-    for (const c of [...new Set(rets)].slice(0, 5).concat(avail.rows.map((b) => b.reg_no))) {
-      code.value = c
-      await scan()
-    }
-  } catch (e) { toast.error(e) }
-}
-
 // Ctrl+Enter: 어디서든 처리하기
 function onKey(e) {
   if (extendTarget.value) return
@@ -277,10 +253,7 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
           <label class="sr-only" for="scan">등록번호</label>
           <input id="scan" ref="scanInput" v-model="code" class="input xl num" placeholder="도서 바코드(등록번호)를 스캔하세요" autocomplete="off" />
         </form>
-        <div class="hint-row">
-          <p class="muted hint">대출 중인 도서는 <b class="t-return">반납</b>, 대출 가능한 도서는 <b class="t-loan">대출</b>로 자동 분류됩니다 · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> 처리하기</p>
-          <button v-if="isDev" class="btn ghost sm" type="button" @click="fillSample">샘플 채우기 (개발용)</button>
-        </div>
+        <p class="muted hint">대출 중인 도서는 <b class="t-return">반납</b>, 대출 가능한 도서는 <b class="t-loan">대출</b>로 자동 분류됩니다 · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> 처리하기</p>
       </section>
 
       <section v-if="queue.length" class="card work">
@@ -435,7 +408,6 @@ const summary = computed(() => [returns.value.length && `반납 ${returns.value.
 .scan-bar { padding: 18px; display: grid; gap: 8px; }
 .input.xl { height: 56px; font-size: 20px; padding: 0 18px; }
 .hint { margin: 0; font-size: 13px; }
-.hint-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 kbd { font: inherit; font-size: 11.5px; padding: 1px 5px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface-2); }
 .t-return { color: var(--blue); }
 .t-loan { color: var(--brand-ink); }
