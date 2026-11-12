@@ -29,7 +29,8 @@ const routes = [
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
-const router = createRouter({ history: createWebHistory(), routes })
+// 업무 화면은 /admin 아래(/는 이용자용 메인). 경로는 이 기준 주소에 대한 상대 경로라 화면 코드는 그대로
+const router = createRouter({ history: createWebHistory('/admin/'), routes })
 
 router.beforeEach((to) => {
   // 로그인 후 원래 가려던 화면으로 돌아가게 next를 붙인다. 첫 화면은 어차피 기본값이라 생략(주소 깔끔하게)

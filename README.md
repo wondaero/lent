@@ -5,7 +5,7 @@ Vue 3 + Vite + Supabase(DB·로그인·Storage·Edge Function), Vercel 배포.
 
 ```bash
 npm install
-npm run dev       # http://localhost:5173  (.env.local 있으면 Supabase 로그인, 없으면 목업)
+npm run dev       # 메인 http://localhost:5173/ · 업무 화면 http://localhost:5173/admin/  (.env.local 있으면 Supabase 로그인, 없으면 목업)
 npm run dev:mock  # Supabase 없이 목업 데이터로 (데모 계정 admin / admin1234)
 npm test          # 청구기호·저자기호·등록번호 규칙 테스트 (node --test, 의존성 없음)
 npm run build
@@ -13,8 +13,12 @@ npm run build
 
 ## 구조
 
+`/` = 이용자용 메인, `/admin` = 업무 화면(한 배포, Vite 진입점 둘).
+
 ```
-src/
+index.html          메인 진입점(지금은 "준비 중" 안내. 메인 소스는 받으면 site/에)
+admin/index.html    업무 화면 진입점 → src/main.js (라우터 기준 주소 /admin/)
+src/                업무 화면
   api/index.js      데이터 접근 레이어 입구 — 화면은 여기만 호출. 로그인 + 아래 둘 중 하나를 골라 연결
   api/remote.js     Supabase 구현(.env.local 있을 때)
   api/mock.js       목업 구현(.env.local 없을 때, npm run dev:mock) + api/mockDb.js 예시 데이터
@@ -77,7 +81,9 @@ cp .env.example .env.local                                           # URL·anon
 
 - GitHub 저장소를 Vercel에 연결(Add New → Project → `lent`). Framework = Vite, 빌드 `npm run build`, 출력 `dist`(자동 인식).
 - **Environment Variables에 `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`**(`.env.local`과 같은 값). 빠뜨리면 빌드가 일부러 실패한다(`vite.config.js`: 값 없이 뜨면 목업 모드로 동작하는 사고 방지). 값을 바꾸면 Redeploy.
-- `vercel.json`: 모든 주소를 `index.html`로(새로고침 404 방지). `public/robots.txt` + `noindex`: 검색엔진 노출 안 함.
+- `vercel.json`: `/admin/*` → `admin/index.html`, 나머지 → `index.html`(새로고침 404 방지). 옛 업무 주소(`/books` 등)는 `/admin/...`으로 이동.
+- `public/robots.txt`는 `/admin`만 막음 + 업무 화면 `noindex`. 메인은 공개 전까지 `noindex`.
+- **직원 PC 즐겨찾기는 `https://<도메인>/admin/`으로 바꾼다**(루트 `/`는 이제 이용자용 메인).
 - 이후 `master`에 푸시하면 자동 재배포.
 
 ## 성능 관련 원칙
