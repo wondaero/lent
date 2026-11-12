@@ -30,7 +30,15 @@ export default defineConfig(({ mode }) => {
       },
     ],
     resolve: {
-      alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+      // @ = 업무 화면(src/), @site = 이용자용 메인(site/). 두 화면 코드를 섞지 않으려고 별칭을 나눴다
+      alias: {
+        '@site': fileURLToPath(new URL('./site', import.meta.url)),
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+      },
+    },
+    css: {
+      // 메인(site/)의 SCSS에만 해당(업무 화면은 순수 CSS). 공통 mixin을 모든 SCSS 파일에 넣는다
+      preprocessorOptions: { scss: { additionalData: `@use "@site/styles/_globals";` } },
     },
     build: {
       // 진입점 둘: / = 이용자용 메인, /admin = 업무 화면. 번들이 나뉘어 메인 방문자는 업무 화면 코드를 받지 않는다

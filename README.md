@@ -8,7 +8,7 @@ npm install
 npm run dev       # 메인 http://localhost:5173/ · 업무 화면 http://localhost:5173/admin/  (.env.local 있으면 Supabase 로그인, 없으면 목업)
 npm run dev:mock  # Supabase 없이 목업 데이터로 (데모 계정 admin / admin1234)
 npm test          # 청구기호·저자기호·등록번호 규칙 테스트 (node --test, 의존성 없음)
-npm run build
+npm run build     # 메인 타입 검사(vue-tsc) + 빌드
 ```
 
 ## 구조
@@ -16,7 +16,8 @@ npm run build
 `/` = 이용자용 메인, `/admin` = 업무 화면(한 배포, Vite 진입점 둘).
 
 ```
-index.html          메인 진입점(지금은 "준비 중" 안내. 메인 소스는 받으면 site/에)
+index.html          메인 진입점 → site/main.ts
+site/               이용자용 메인(TypeScript + SCSS, lent26에서 옮김). services/api.ts = 공개 데이터 입구
 admin/index.html    업무 화면 진입점 → src/main.js (라우터 기준 주소 /admin/)
 src/                업무 화면
   api/index.js      데이터 접근 레이어 입구 — 화면은 여기만 호출. 로그인 + 아래 둘 중 하나를 골라 연결
@@ -105,3 +106,4 @@ cp .env.example .env.local                                           # URL·anon
 - 대출/반납은 단일 RPC `loans_process`(트랜잭션), 연장 `loans_extend`, 바코드 번호 `barcode_issue`/`barcode_release`
 - `books.lookupIsbn` = Edge Function `isbn-lookup`(직원 계정만 호출 가능)
 - 로그인 = Supabase Auth(`api/index.js`의 `auth`), 데이터 접근은 `staff` 명단에 있는 계정만(`is_staff()`)
+- 메인(공개 키)은 `public_books`·`public_posts`·`public_post`·`public_home` 함수만 실행 가능(공개 항목만 반환, 테이블 권한 없음)

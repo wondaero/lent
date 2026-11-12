@@ -1,0 +1,399 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: auto !important;
+}
+
+body {
+    color: #232121;
+    font-family: Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+    line-height: 1.6;
+}
+
+@media(max-width: 350px) {
+    html {
+        font-size: 14px;
+    }
+}
+
+a {
+    line-break: anywhere;
+}
+
+a[href] {
+    color: inherit;
+}
+
+p {
+    margin-bottom: var(--px16);
+}
+
+img {
+    max-width: 100%;
+}
+
+.lined {
+    border: var(--px1) solid var(--color-border);
+}
+
+.img {
+    display: inline-block;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-color: #fff;
+    background-position: center;
+    width: 100%;
+    height: 100%;
+}
+
+.no-overflow {
+    overflow: hidden !important;
+}
+
+.pre-wrap {
+    white-space: pre-wrap;
+}
+
+.w-100px {
+    width: 100px;
+}
+
+.w-200px {
+    width: 200px;
+}
+
+.h-400px {
+    height: 400px;
+}
+
+.h-150px {
+    height: 150px;
+}
+
+.h-200px {
+    height: 200px;
+}
+
+.mh-100px {
+    max-height: 100px;
+}
+
+.mh-150px {
+    max-height: 150px;
+}
+
+.mh-200px {
+    max-height: 200px;
+}
+
+.mh-400px {
+    max-height: 400px;
+}
+
+.mh-500px {
+    max-height: 500px;
+}
+
+.fs-30px {
+    font-size: var(--px30);
+}
+
+.container {
+    max-width: 1200px;
+}
+// ── 공통 화면 요소 ──
+
+// 화면 위쪽 여백 (lent25 페이지와 같게)
+.page {
+    padding: var(--px20) 0 0;
+
+    @media(max-width: 767px) {
+        padding-top: var(--px27);
+    }
+}
+
+.btn-point {
+    background: var(--color-point);
+    border-color: var(--color-point);
+    color: #fff;
+
+    &:hover,
+    &:focus,
+    &:active,
+    &:disabled {
+        background: var(--color-point);
+        border-color: var(--color-point);
+        color: #fff;
+    }
+
+    &:hover {
+        opacity: 0.9;
+    }
+}
+
+.btn-light-line {
+    background: #fff;
+    border: var(--px1) solid var(--color-border);
+    color: var(--color-default);
+
+    &:hover {
+        background: var(--color-background);
+    }
+}
+
+.form-control,
+.form-select {
+    border-color: var(--color-border);
+
+    &:focus {
+        border-color: var(--color-point);
+        box-shadow: none;
+    }
+}
+
+// 라벨 + 입력칸 묶음
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--px6);
+    margin-bottom: var(--px14);
+
+    >label,
+    >.label {
+        font-size: var(--px14);
+        font-weight: 600;
+        color: var(--color-secondary);
+
+        .required {
+            color: var(--color-red);
+            margin-left: var(--px2);
+        }
+    }
+
+    .hint {
+        font-size: var(--px13);
+        color: var(--color-secondary);
+    }
+}
+
+.fields-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--px14);
+
+    .span-2 {
+        grid-column: span 2;
+    }
+
+    @media(max-width: 575px) {
+        grid-template-columns: minmax(0, 1fr);
+
+        .span-2 {
+            grid-column: auto;
+        }
+    }
+}
+
+// 상태 표시 작은 글자 상자
+.tag {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--px2) var(--px8);
+    border-radius: var(--px4);
+    background: var(--color-tag);
+    color: var(--color-point);
+    font-size: var(--px13);
+    font-weight: 600;
+    white-space: nowrap;
+
+    &.ok {
+        background: #e6f8ee;
+        color: #138a4b;
+    }
+
+    &.warn {
+        background: #fff4e0;
+        color: #b46a00;
+    }
+
+    &.danger {
+        background: #fdecee;
+        color: var(--color-red);
+    }
+
+    &.muted {
+        background: var(--color-background);
+        color: var(--color-secondary);
+    }
+}
+
+.empty {
+    padding: var(--px50) 0;
+    text-align: center;
+    color: var(--color-secondary);
+}
+
+// 데이터를 불러오는 중 자리 표시
+.skeleton {
+    @include globals.skeleton();
+    border-radius: var(--px6);
+    min-height: var(--px20);
+}
+
+// 목록 (표 대신 카드 줄)
+.rows {
+    border-top: var(--px1) solid var(--color-default);
+
+    >.row-item {
+        display: flex;
+        align-items: center;
+        gap: var(--px12);
+        padding: var(--px14) var(--px6);
+        border-bottom: var(--px1) solid var(--color-border-light);
+        text-decoration: none;
+        color: inherit;
+
+        &.clickable {
+            cursor: pointer;
+
+            &:hover {
+                background: var(--color-background);
+            }
+        }
+
+        .main {
+            flex: 1;
+            min-width: 0;
+
+            .title {
+                font-weight: 600;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .sub {
+                margin-top: var(--px2);
+                font-size: var(--px14);
+                color: var(--color-secondary);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+        }
+
+        .side {
+            flex: none;
+            display: flex;
+            align-items: center;
+            gap: var(--px8);
+            font-size: var(--px14);
+            color: var(--color-secondary);
+        }
+    }
+}
+
+// 검색창 (lent25 도서 검색 모양)
+.search-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--px8);
+
+    select {
+        width: auto;
+        flex: none;
+        height: var(--px56);
+    }
+
+    input {
+        flex: 1;
+        min-width: 0;
+        height: var(--px56);
+        padding: 0 var(--px18);
+        font-size: var(--px16);
+    }
+
+    .btn-search {
+        width: var(--px56);
+        height: var(--px56);
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--color-point);
+        border: 0;
+        border-radius: var(--px8);
+
+        img {
+            width: var(--px22);
+        }
+
+        &:hover {
+            opacity: 0.9;
+        }
+    }
+
+    @media(max-width: 767px) {
+
+        select,
+        input,
+        .btn-search {
+            height: var(--px48);
+        }
+
+        .btn-search {
+            width: var(--px48);
+        }
+
+        select {
+            padding-right: var(--px28);
+        }
+    }
+}
+
+// 정보 표 (라벨 - 값)
+.info-list {
+    display: grid;
+    grid-template-columns: var(--px90) minmax(0, 1fr);
+    gap: var(--px8) var(--px12);
+    margin: 0;
+    font-size: var(--px15);
+
+    dt {
+        font-weight: 600;
+        color: var(--color-secondary);
+    }
+
+    dd {
+        margin: 0;
+        word-break: break-all;
+    }
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--px10);
+    flex-wrap: wrap;
+    margin-bottom: var(--px14);
+
+    .count {
+        font-size: var(--px15);
+        color: var(--color-secondary);
+
+        b {
+            color: var(--color-default);
+        }
+    }
+
+    .actions {
+        display: flex;
+        gap: var(--px6);
+        flex-wrap: wrap;
+    }
+}

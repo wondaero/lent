@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:mock": "vite --mode mock",
-    "build": "vite build",
+    "build": "npm run typecheck && vite build",
+    "typecheck": "vue-tsc -p tsconfig.site.json",
     "preview": "vite preview",
     "test": "node --test \"tests/*.test.js\"",
     "legacy:import": "node scripts/legacy-import.mjs"
@@ -20,6 +21,10 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.10",
-    "vite": "^7.3.7"
+    "@vue/tsconfig": "^0.9.1",
+    "sass": "^1.108.2",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.7",
+    "vue-tsc": "^3.3.14"
   }
 }

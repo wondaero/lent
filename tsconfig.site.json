@@ -1,0 +1,11 @@
+{
+  // 메인(site/)만 타입 검사한다. 업무 화면(src/)은 JS라 대상이 아님. 실행: npm run typecheck (build에 포함)
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "include": ["site/**/*.ts", "site/**/*.vue"],
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "paths": { "@site/*": ["./site/*"] },
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.site.tsbuildinfo"
+  }
+}

@@ -1,31 +1,38 @@
 <!doctype html>
 <!--
-  이용자용 메인(/) 진입점. 지금은 자리만 잡아 둔 안내 페이지다.
-  메인을 붙일 때: 이 파일을 메인의 index.html로 바꾸고, 소스는 site/ 폴더에 둔다(업무 화면 src/와 섞지 않음).
+  이용자용 메인(/) 진입점 → site/main.ts. 업무 화면(/admin)은 admin/index.html.
+  화면은 lent26(공개 홈페이지)에서 옮겨 왔다(2026-11-13). 템플릿 라이선스: doc/licenses/.
   공개되면 아래 robots noindex를 지운다(/admin은 admin/index.html·robots.txt에서 계속 막음).
 -->
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
     <meta name="robots" content="noindex, nofollow" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/icons/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="description" content="서울시 은평구 응암동에 위치한 그루터기작은도서관입니다.">
+    <meta name="keywords" content="그루터기작은도서관, 작은도서관, 은평구, 응암동">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="그루터기작은도서관">
+    <meta property="og:title" content="그루터기작은도서관">
+    <meta property="og:description" content="서울시 은평구 응암동에 위치한 그루터기작은도서관입니다.">
+    <meta property="og:image" content="/images/og.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="/images/og.png">
+    <link rel="stylesheet" href="/assets/styles/bootstrap.min.css" />
+    <link rel="stylesheet" href="/assets/styles/pretendard.min.css" />
+    <link rel="stylesheet" href="/assets/styles/variables.css" />
     <title>그루터기작은도서관</title>
-    <style>
-      :root { --bg: #f6f7f5; --text: #1f2421; --text-2: #5b635e; color-scheme: light; }
-      @media (prefers-color-scheme: dark) { :root { --bg: #151816; --text: #e7ebe8; --text-2: #a3aba6; color-scheme: dark; } }
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--text);
-             font-family: system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif; padding: 16px; box-sizing: border-box; text-align: center; }
-      img { width: 72px; height: auto; }
-      h1 { font-size: 22px; margin: 14px 0 6px; }
-      p { margin: 0; color: var(--text-2); }
-    </style>
-  </head>
-  <body>
-    <main>
-      <img src="/logo.svg" alt="" />
-      <h1>그루터기작은도서관</h1>
-      <p>홈페이지를 준비하고 있습니다.</p>
-    </main>
-  </body>
+</head>
+<body>
+<div id="app"></div>
+<script type="module" src="/site/main.ts"></script>
+</body>
 </html>
