@@ -1,4 +1,4 @@
-// Supabase 값이 없을 때(npm run dev:mock 등) 메인이 쓰는 목업. 업무 화면과 같은 목업 데이터(src/api/mockDb.js)를 읽어
+// Supabase 값이 없을 때(npm run dev 등) 메인이 쓰는 목업. 업무 화면과 같은 목업 데이터(src/api/mockDb.js)를 읽어
 // 공개 함수(public_books 등)와 같은 규칙으로 고른다: 분실·폐기 도서 제외, 게시된 글만, 띄어쓰기 무시 검색.
 import type { SiteApi } from './api';
 import type { BoardName, PostImage } from '@site/types/models';
