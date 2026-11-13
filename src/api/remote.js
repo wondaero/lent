@@ -309,9 +309,9 @@ export const stats = {
     const { data } = await run((await sb()).rpc('dashboard_stats'))
     return data
   },
-  // 날짜별 건수를 받아 일/주/월 구간으로 묶는다(구간 계산은 목업과 같은 trend.js)
-  async loanTrend(unit = 'day') {
-    const buckets = trendBuckets(unit)
+  // 날짜별 건수를 받아 일/주/월 구간으로 묶는다(구간 계산은 목업과 같은 trend.js). range = { from, to } 없으면 최근
+  async loanTrend(unit = 'day', range = null) {
+    const buckets = trendBuckets(unit, range)
     const { data } = await run((await sb()).rpc('loan_daily_counts', { p_from: fmtDate(buckets[0].start) }))
     const loanCnt = Array(buckets.length).fill(0)
     const returnCnt = Array(buckets.length).fill(0)
@@ -321,7 +321,7 @@ export const stats = {
       loanCnt[i] += r.loans
       returnCnt[i] += r.returns
     }
-    return { labels: buckets.map((b) => b.label), loans: loanCnt, returns: returnCnt }
+    return { labels: buckets.map((b) => b.label), ranges: buckets.map((b) => ({ from: b.from, to: b.to, partial: b.partial })), loans: loanCnt, returns: returnCnt }
   },
 }
 

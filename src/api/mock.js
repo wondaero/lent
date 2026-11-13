@@ -428,9 +428,9 @@ export const stats = {
       category,
     })
   },
-  // unit: 'day'(최근 30일) | 'week'(최근 12주) | 'month'(최근 12개월)
-  async loanTrend(unit = 'day') {
-    const buckets = trendBuckets(unit)
+  // unit: 'day' | 'week' | 'month', range = { from, to } 없으면 최근(30일 / 12주 / 12개월). 구간 계산은 trend.js
+  async loanTrend(unit = 'day', range = null) {
+    const buckets = trendBuckets(unit, range)
     const loanCnt = Array(buckets.length).fill(0)
     const returnCnt = Array(buckets.length).fill(0)
     const idx = (t) => bucketIndex(buckets, t)
@@ -442,7 +442,7 @@ export const stats = {
         if (r >= 0) returnCnt[r]++
       }
     }
-    return wait({ labels: buckets.map((b) => b.label), loans: loanCnt, returns: returnCnt })
+    return wait({ labels: buckets.map((b) => b.label), ranges: buckets.map((b) => ({ from: b.from, to: b.to, partial: b.partial })), loans: loanCnt, returns: returnCnt })
   },
 }
 
