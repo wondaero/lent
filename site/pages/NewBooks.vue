@@ -6,7 +6,7 @@ import Pagination from '@site/components/Pagination.vue';
 import BookRows from '@site/components/BookRows.vue';
 import BookSheet from '@site/components/BookSheet.vue';
 import { BookApi } from '@site/services/api';
-import { toastError } from '@site/composable/useFeedback';
+import LoadError from '@site/components/LoadError.vue';
 import type { Book } from '@site/types/models';
 
 const route = useRoute();
@@ -17,6 +17,7 @@ const PAGE_SIZE = 20;
 const state = reactive({
     searchText: '',
     loading: true,
+    error: null as unknown,
     books: [] as Book[],
     total: 0,
     page: 1,
@@ -28,13 +29,16 @@ const load = async () => {
     state.searchText = String(route.query.q ?? '');
     state.page = Math.max(1, Number(route.query.page) || 1);
     state.loading = true;
+    state.error = null;
 
     try {
         const res = await BookApi.listNew({ q: state.searchText, page: state.page, size: PAGE_SIZE });
         state.books = res.items;
         state.total = res.total;
     } catch (error) {
-        toastError(error);
+        state.error = error;
+        state.books = [];
+        state.total = 0;
     } finally {
         state.loading = false;
     }
@@ -66,9 +70,10 @@ watch(() => route.query, load, { immediate: true });
                 </form>
             </div>
             <div class="toolbar">
-                <div class="count">총 <b>{{ state.total.toLocaleString() }}</b>권</div>
+                <div class="count"><template v-if="!state.error">총 <b>{{ state.total.toLocaleString() }}</b>권</template></div>
             </div>
-            <BookRows :books="state.books" :loading="state.loading" show-date @select="selected = $event">
+            <LoadError v-if="state.error && !state.loading" :error="state.error" @retry="load" />
+            <BookRows v-else :books="state.books" :loading="state.loading" show-date @select="selected = $event">
                 <template #empty>최근 한 달 동안 새로 들어온 책이 없어요.</template>
             </BookRows>
             <Pagination :page="state.page" :size="PAGE_SIZE" :total="state.total" @change="onPage" />

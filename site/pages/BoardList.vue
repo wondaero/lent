@@ -5,7 +5,7 @@ import PageTitle from '@site/components/PageTitle.vue';
 import Pagination from '@site/components/Pagination.vue';
 import { BoardApi } from '@site/services/api';
 import { boardByName } from '@site/definitions/boards';
-import { toastError } from '@site/composable/useFeedback';
+import LoadError from '@site/components/LoadError.vue';
 import { formatDate } from '@site/libs/format';
 import type { BoardName, Post } from '@site/types/models';
 
@@ -19,6 +19,7 @@ const definition = computed(() => boardByName(props.board));
 const state = reactive({
     searchText: '',
     loading: true,
+    error: null as unknown,
     posts: [] as Post[],
     total: 0,
     page: 1,
@@ -29,6 +30,7 @@ const load = async () => {
     state.searchText = String(route.query.q ?? '');
     state.page = Math.max(1, Number(route.query.page) || 1);
     state.loading = true;
+    state.error = null;
 
     try {
         const res = await BoardApi.list(props.board, { q: state.searchText, page: state.page });
@@ -36,7 +38,9 @@ const load = async () => {
         state.total = res.total;
         state.size = res.size;
     } catch (error) {
-        toastError(error);
+        state.error = error;
+        state.posts = [];
+        state.total = 0;
     } finally {
         state.loading = false;
     }
@@ -59,7 +63,7 @@ watch(() => [props.board, route.query], load, { immediate: true });
         <div class="container">
             <PageTitle :title="definition.title" :desc="definition.desc" />
             <div class="toolbar">
-                <div class="count">총 <b>{{ state.total.toLocaleString() }}</b>건</div>
+                <div class="count"><template v-if="!state.error">총 <b>{{ state.total.toLocaleString() }}</b>건</template></div>
                 <div class="actions">
                     <form class="mini-search" @submit.prevent="onSearch">
                         <input v-model="state.searchText" type="search" class="form-control" placeholder="제목·내용" />
@@ -75,6 +79,7 @@ watch(() => [props.board, route.query], load, { immediate: true });
                     </div>
                 </div>
             </div>
+            <LoadError v-else-if="state.error" :error="state.error" @retry="load" />
             <div v-else-if="state.posts.length" class="rows">
                 <router-link v-for="post in state.posts" :key="post.id" :to="`${definition.path}/${post.id}`"
                     class="row-item clickable">

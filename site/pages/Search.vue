@@ -6,7 +6,7 @@ import Pagination from '@site/components/Pagination.vue';
 import BookRows from '@site/components/BookRows.vue';
 import BookSheet from '@site/components/BookSheet.vue';
 import { BookApi } from '@site/services/api';
-import { toastError } from '@site/composable/useFeedback';
+import LoadError from '@site/components/LoadError.vue';
 import type { Book } from '@site/types/models';
 
 const route = useRoute();
@@ -25,6 +25,7 @@ const state = reactive({
     field: 'all',
     loading: false,
     searched: false,
+    error: null as unknown,
     books: [] as Book[],
     total: 0,
     page: 1,
@@ -43,17 +44,21 @@ const load = async () => {
         state.books = [];
         state.total = 0;
         state.searched = false;
+        state.error = null;
         return;
     }
 
     state.loading = true;
+    state.error = null;
     try {
         const res = await BookApi.list({ q, field: state.field, page: state.page, size: PAGE_SIZE });
         state.books = res.items;
         state.total = res.total;
         state.searched = true;
     } catch (error) {
-        toastError(error);
+        state.error = error;
+        state.books = [];
+        state.total = 0;
     } finally {
         state.loading = false;
     }
@@ -88,7 +93,8 @@ watch(() => route.query, load, { immediate: true });
             </form>
 
             <div class="results">
-                <template v-if="state.searched || state.loading">
+                <LoadError v-if="state.error && !state.loading" :error="state.error" @retry="load" />
+                <template v-else-if="state.searched || state.loading">
                     <div class="toolbar">
                         <div class="count">검색 결과 <b>{{ state.total.toLocaleString() }}</b>건</div>
                     </div>

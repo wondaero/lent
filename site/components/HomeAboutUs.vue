@@ -38,14 +38,15 @@ watch(() => [visible.value, props.books, props.members] as const, ([v, books, me
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Zm-12 9a8 8 0 0 1 16 0" />
                     </svg>
-                    <div class="value">{{ memberCount.toLocaleString() }}</div>
+                    <!-- 숫자를 받기 전·받지 못했을 때 0을 보이면 "회원·장서가 없다"로 읽혀서 "-" -->
+                    <div class="value">{{ members == null ? '-' : memberCount.toLocaleString() }}</div>
                     <div class="label">전체 회원 수</div>
                 </div>
                 <div class="stat-card">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5v-16ZM4 21.5A2.5 2.5 0 0 1 6.5 19H20" />
                     </svg>
-                    <div class="value">{{ bookCount.toLocaleString() }}</div>
+                    <div class="value">{{ books == null ? '-' : bookCount.toLocaleString() }}</div>
                     <div class="label">관내 비치된 책</div>
                 </div>
             </div>

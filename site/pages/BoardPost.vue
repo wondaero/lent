@@ -3,7 +3,8 @@ import { computed, reactive, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { BoardApi } from '@site/services/api';
 import { boardByName } from '@site/definitions/boards';
-import { toast, toastError } from '@site/composable/useFeedback';
+import { toast } from '@site/composable/useFeedback';
+import LoadError from '@site/components/LoadError.vue';
 import { useGlobalStore } from '@site/stores/global';
 import { formatDate } from '@site/libs/format';
 import commonLib from '@site/libs/commonLib';
@@ -18,6 +19,7 @@ const definition = computed(() => boardByName(props.board));
 
 const state = reactive({
     loading: true,
+    error: null as unknown,
     post: null as PostDetail | null,
 });
 
@@ -26,6 +28,7 @@ const contentHtml = computed(() => commonLib.linkify(commonLib.escapeHtml(state.
 
 const load = async () => {
     state.loading = true;
+    state.error = null;
     try {
         const post = await BoardApi.get(Number(props.id));
         // 없는 글·임시저장 글이거나, 주소의 분류가 다르면(공지 번호를 활동 주소로) 목록으로
@@ -37,8 +40,8 @@ const load = async () => {
         state.post = post;
         globalStore.updateSiteTitle(post.title);
     } catch (error) {
-        toastError(error);
-        router.replace(definition.value.path);
+        state.error = error;
+        state.post = null;
     } finally {
         state.loading = false;
     }
@@ -56,6 +59,7 @@ watch(() => props.id, load, { immediate: true });
                 <div class="skeleton" style="width: 50%; height: 28px"></div>
                 <div class="skeleton mt-3" style="height: 160px"></div>
             </article>
+            <LoadError v-else-if="state.error" :error="state.error" @retry="load" />
             <article v-else-if="state.post" class="post" :class="{ 'has-photos': state.post.images.length }">
                 <header>
                     <h1>{{ state.post.title }}</h1>
