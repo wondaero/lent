@@ -297,7 +297,7 @@
    - `index.html`의 `noindex`를 지운다.
    - Vercel 환경변수를 확인한다(메인도 같은 `VITE_SUPABASE_*` 사용).
    - 직원 PC 즐겨찾기를 `/admin/`으로 바꾼다.
-5. **Supabase 대시보드:** Authentication → "Allow new users to sign up" 끄기. 2026-11-13 공개 설정 주소(`/auth/v1/settings`)로 확인했을 때 아직 켜져 있음(`disable_signup=false`). 대시보드 접근과는 별개: 홈페이지에 든 공개 키만 있으면 누구나 가입 요청을 보낼 수 있다(데이터는 staff 명단으로 막혀 있음).
+5. Supabase 회원가입("Allow new users to sign up")은 2026-11-13 끔. 공개 설정 주소(`/auth/v1/settings`)에서 `disable_signup=true` 확인. 직원 계정은 대시보드에서 직접 만든다.
 6. **사용자 쪽 데이터 확인:**
    - 깨진 저자기호 4권(EM00004447, EM00008702, EM00009773, EM00010982). 사용자가 직접 고친다.
    - 등록번호 칸에 ISBN이 든 6권은 서가에서 확인한다.
