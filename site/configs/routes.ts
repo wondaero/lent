@@ -54,6 +54,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../pages/NewBooks.vue'),
         meta: { title: '신간 도서' },
     },
+    {
+        path: '/privacy',
+        component: () => import('../pages/Privacy.vue'),
+        meta: { title: '개인정보처리방침' },
+    },
     ...boardRoutes,
     {
         path: '/:pathMatch(.*)*',

@@ -3,7 +3,7 @@ import { currentYear } from '@site/definitions/date';
 </script>
 
 <template>
-    <footer ref="rootRef">
+    <footer>
         <div class="container">
             <div class="side">
                 <span>&copy; {{ currentYear }}. 그루터기작은도서관. All rights reserved.</span>
@@ -15,7 +15,7 @@ import { currentYear } from '@site/definitions/date';
                     <a href="tel:07087791340" class="phone">070-8779-1340</a>
                 </div>
                 <span class="divider"></span>
-                <a href="#" class="privacy">개인정보처리방침</a>
+                <router-link to="/privacy" class="privacy">개인정보처리방침</router-link>
             </div>
         </div>
     </footer>

@@ -144,7 +144,7 @@ const trendTotal = computed(() => trend.value?.loans.reduce((a, b) => a + b, 0) 
       </div>
       <div class="ranks">
         <div>
-          <h4 class="rank-title">많이 빌려진 책</h4>
+          <h4 class="rank-title">인기 도서</h4>
           <ol v-if="rankings?.books.length" class="rank-list">
             <li v-for="(b, i) in rankings.books" :key="b.title">
               <span class="no num">{{ i + 1 }}</span>

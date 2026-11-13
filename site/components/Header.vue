@@ -28,7 +28,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <header ref="rootRef" :class="{ 'drawer-open': globalStore.headerDrawerOpen }">
+    <header :class="{ 'drawer-open': globalStore.headerDrawerOpen }">
         <div class="top">
             <div class="container">
                 <div class="left section">
@@ -86,53 +86,11 @@ header {
                         >img {
                             height: var(--px45);
                         }
-
-                        >span {
-                            font-weight: 700;
-                            font-size: var(--px21);
-                            letter-spacing: var(--px-1);
-                        }
                     }
                 }
 
                 &.right {
                     gap: var(--px5);
-
-                    >.account {
-                        display: flex;
-                        align-items: center;
-                        gap: var(--px2);
-
-                        .icon-btn {
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            width: var(--px40);
-                            height: var(--px40);
-                            padding: 0;
-                            border: 0;
-                            border-radius: 50%;
-                            background: none;
-                            color: var(--color-default);
-                            cursor: pointer;
-                            transition: background var(--transition-time), color var(--transition-time);
-
-                            svg {
-                                width: var(--px22);
-                                height: var(--px22);
-                                fill: none;
-                                stroke: currentColor;
-                                stroke-width: 1.8;
-                                stroke-linecap: round;
-                                stroke-linejoin: round;
-                            }
-
-                            &:hover {
-                                background: var(--color-tag);
-                                color: var(--color-point);
-                            }
-                        }
-                    }
 
                     >.drawer {
                         display: none;
@@ -169,12 +127,6 @@ header {
                         justify-content: center;
                         padding: var(--px8);
                         transition: opacity var(--transition-time);
-
-                        svg {
-                            width: var(--px24);
-                            height: var(--px24);
-                            color: inherit;
-                        }
 
                         &:hover {
                             opacity: 0.76;
@@ -222,9 +174,6 @@ header {
                     }
 
                     &.right {
-                        >.account {
-                            display: none;
-                        }
 
                         >.drawer {
                             display: flex;
@@ -245,31 +194,6 @@ header {
             visibility: hidden;
             transition: opacity var(--transition-time), visibility var(--transition-time);
             z-index: 25;
-
-            .mobile-account {
-                display: flex;
-                align-items: center;
-                gap: var(--px16);
-                padding: var(--px20) 0 0;
-                font-size: var(--px15);
-
-                a,
-                button {
-                    padding: 0;
-                    border: 0;
-                    background: none;
-                    color: inherit;
-                    text-decoration: none;
-                }
-
-                .name {
-                    font-weight: 600;
-                }
-
-                .link {
-                    color: var(--color-secondary);
-                }
-            }
         }
     }
 
