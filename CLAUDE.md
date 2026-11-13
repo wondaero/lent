@@ -28,6 +28,8 @@
   - `/admin/*` 새로고침: 배포는 `vercel.json` rewrites, 개발·미리보기는 `vite.config.js`의 `admin-spa-fallback`. 옛 업무 주소(`/books`, `/login` 등)는 `vercel.json`에서 `/admin/...`으로 임시 이동(직원 즐겨찾기용) → **메인이 같은 이름의 주소(예: `/posts`)를 쓰게 되면 그 줄을 지운다.**
   - 검색 노출: `robots.txt`는 `/admin`만 막음, `admin/index.html`은 `noindex`. 메인 `index.html`은 공개 전까지 `noindex`.
   - 4절 디자인 규칙은 업무 화면 기준이다. 메인은 lent26 디자인(포인트 색 `--color-point` 남색, Pretendard, bootstrap 유틸리티 클래스)을 따른다. 상태 용어(대출가능·대출중)는 4절과 같게.
+  - **메인 글꼴 = Pretendard dynamic subset**(2026-11-13, 사용자 결정 "성능 우선"): `public/assets/fonts/subset/`(굵기 400~800 × 글자 범위 92개, OFL 라이선스 `OFL.txt`), CSS `public/assets/styles/pretendard.min.css`. 페이지에 쓰인 글자의 파일만 받아 첫 방문 글꼴이 약 2.3MB → 150~235KB. `font-display: swap`. 굵기를 더 쓰려면 pretendard@1.3.9 패키지의 `pretendard-dynamic-subset.css`에서 그 굵기만 더 옮긴다.
+  - **관리자 글꼴은 시스템 글꼴 그대로**(파일을 받지 않음, Windows = 맑은 고딕. 도서 목록 열 폭이 이 기준으로 재어져 있음).
 - Vue 3 (`<script setup>`) + Vite + vue-router. 차트는 Chart.js(필요한 컨트롤러만 등록).
 - **UI 라이브러리 금지.** 순수 CSS + CSS 변수(`src/styles/base.css`).
 - **성능이 중요하다.**
@@ -284,6 +286,7 @@
    - 활동 사진(Storage 공개 주소)이 뜨는지: 관리자에서 사진 있는 활동 글을 실제로 게시해 본다(2026-11-13 기준 게시 글 0개).
    - 모바일(375px)에서 글 상세의 본문~사진 간격(마지막 수정 후 브라우저로 다시 보지 못함).
 3. **메인 정리할 것:**
+   - 불러오기 실패 표시·글꼴 용량은 2026-11-13 처리함.
    - `site/components/Header.vue`에 로그인 버튼용 스타일(`.account`, `.mobile-account`)이 남아 있다(화면에는 영향 없음). 지운다.
    - 홈 활동 칸은 5개 기준 배치라, 사진 있는 활동 글이 1~4개일 때 빈칸 모양을 확인한다(0개면 칸 자체를 숨김).
 4. **메인 공개(배포) 전:**
