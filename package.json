@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:mock": "vite --mode mock",
+    "dev": "vite --mode mock",
+    "dev:live": "vite",
     "build": "npm run typecheck && vite build",
     "typecheck": "vue-tsc -p tsconfig.site.json",
     "preview": "vite preview",

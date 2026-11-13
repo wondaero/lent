@@ -52,7 +52,11 @@
 - **구현은 두 벌이고 반환 형태가 같아야 한다:** `.env.local`이 있으면 `api/remote.js`(Supabase), 없으면 `api/mock.js`(목업 `mockDb.js`, 도서 1,200 / 회원 260 / 대출 1년치). `index.js`가 로그인(`auth`)과 함께 쓸 쪽만 동적 import한다. **함수를 추가·변경하면 두 파일을 같이 고친다.**
   - remote: 목록 조합은 DB view(`book_list`·`member_list`·`loan_list`), 통계는 RPC(`dashboard_stats`·`loan_daily_counts`), 여러 테이블 변경은 RPC. 청구기호 해석은 JS(`parseCallQuery`)로 하고 DB에는 해석된 조건만 보낸다(규칙 한 곳).
   - 공용: `api/trend.js`(기간별 그래프 구간), `api/devCatalog.js`(개발용 예시 ISBN, 두 모드 모두 목업 응답).
-  - 목업으로 화면만 볼 때: `npm run dev:mock`(= `vite --mode mock`, `.env.mock`이 `.env.local`의 값을 비움. Windows에서도 동작. 데모 계정 `admin` / `admin1234`).
+  - **개발 서버는 목업이 기본(사용자 결정 2026-11-13: 운영 중에는 개발하다 실제 데이터를 건드리면 안 됨).**
+    - `npm run dev` = 목업(`vite --mode mock`, `.env.mock`이 `.env.local`의 값을 비움. 데모 계정 `admin` / `admin1234`).
+    - `npm run dev:live` = 실제 DB(`.env.local` 필요, 없으면 시작하지 않고 멈춤). 필요할 때만 일부러 쓴다.
+    - 개발 서버에서는 화면 왼쪽 아래에 지금 데이터가 표시된다(`vite.config.js`의 `dataSourceBadge`): 회색 "목업 데이터" / 빨간 "실제 DB 연결 중". 배포·빌드 미리보기·인쇄에는 안 나온다.
+    - `.env.local`에는 Supabase 주소와 공개 키(anon)만. git에 안 올라감(.gitignore). 공개 키는 원래 배포된 메인 코드에 들어 있는 값이다.
 - **Supabase 스키마 = `supabase/migrations/`**(테이블·인덱스·RLS·RPC·Storage). 목업(`mockDb.js` 상단 주석)과 테이블·컬럼 이름이 같아야 한다. 스키마를 바꾸면 새 마이그레이션 파일을 추가하고 목업·`api/index.js`·이관 스크립트도 맞춘다.
   - 테이블: `books`, `members`, `loans`, `posts`, `post_images`, `settings`(키-값), `staff`(직원 명단).
   - **컬럼 이름은 뜻이 바로 보이게**(옛 `mbr_nm`·`book_cde` 같은 줄임말 금지, 사용자 결정). 모든 컬럼에 한국어 `comment on column`을 단다. 헷갈리던 이름은 바꿨다: `label_printed` → `spine_label_printed`(라벨이 두 종류), `birth` → `birth_date`, `barcode_last_no` → `barcode_last_issued_no`.
@@ -287,7 +291,7 @@
 마지막 갱신 2026-11-13. 끝난 항목은 지운다.
 
 1. 공개 함수 마이그레이션은 2026-11-13 적용함. 공개 키로 확인: 장서 8,889 · 회원 181(DB 값), 띄어쓰기 무시 검색, 신간 30일, 테이블·업무 함수 직접 호출은 거부. 관리자가 게시한 글은 메인에 나오고 임시저장은 안 나옴(실제 DB에서 시험 후 되돌림).
-2. **실제 데이터로 메인 확인(남은 것)**(`npm run dev` → http://localhost:5173/):
+2. **실제 데이터로 메인 확인(남은 것)**(`npm run dev:live` → http://localhost:5173/):
    - 활동 사진(Storage 공개 주소)이 뜨는지: 관리자에서 사진 있는 활동 글을 실제로 게시해 본다(2026-11-13 기준 게시 글 0개).
    - 모바일(375px)에서 글 상세의 본문~사진 간격(마지막 수정 후 브라우저로 다시 보지 못함).
 3. **메인 정리할 것:**

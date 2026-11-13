@@ -5,8 +5,8 @@ Vue 3 + Vite + Supabase(DB·로그인·Storage·Edge Function), Vercel 배포.
 
 ```bash
 npm install
-npm run dev       # 메인 http://localhost:5173/ · 업무 화면 http://localhost:5173/admin/  (.env.local 있으면 Supabase 로그인, 없으면 목업)
-npm run dev:mock  # Supabase 없이 목업 데이터로 (데모 계정 admin / admin1234)
+npm run dev       # 목업 데이터(기본, 데모 계정 admin / admin1234) · 메인 http://localhost:5173/ · 업무 화면 http://localhost:5173/admin/
+npm run dev:live  # 실제 DB(.env.local 필요). 여기서 바꾸면 실제 데이터가 바뀜 → 필요할 때만
 npm test          # 청구기호·저자기호·등록번호 규칙 테스트 (node --test, 의존성 없음)
 npm run build     # 메인 타입 검사(vue-tsc) + 빌드
 ```
@@ -22,7 +22,7 @@ admin/index.html    업무 화면 진입점 → src/main.js (라우터 기준 �
 src/                업무 화면
   api/index.js      데이터 접근 레이어 입구 — 화면은 여기만 호출. 로그인 + 아래 둘 중 하나를 골라 연결
   api/remote.js     Supabase 구현(.env.local 있을 때)
-  api/mock.js       목업 구현(.env.local 없을 때, npm run dev:mock) + api/mockDb.js 예시 데이터
+  api/mock.js       목업 구현(npm run dev, 또는 .env.local 없을 때) + api/mockDb.js 예시 데이터
   api/supabase.js   Supabase 클라이언트(동적 import) / trend.js 그래프 구간 / devCatalog.js 개발용 예시 ISBN
   lib/              청구기호(callNumber), 등록번호(regNo), Code 128, 엑셀 내보내기, 사진 줄이기,
                     포맷·상수, usePagedList(목록 공통), useLeaveGuard, useToday, useLabelSheet
@@ -67,7 +67,7 @@ Supabase 프로젝트: **lent** (ref `gxmgjdfnncaihqbxowgq`, 서울 리전) — 
 ```bash
 npx supabase login                                                   # 브라우저로 로그인 (컴퓨터마다 1회)
 npx supabase functions deploy isbn-lookup --remote=gxmgjdfnncaihqbxowgq   # 함수 수정 후 재배포 (CLI v3)
-cp .env.example .env.local                                           # URL·anon key 채우기 → npm run dev 재시작
+cp .env.example .env.local                                           # URL·anon key 채우기 → npm run dev:live 재시작
 ```
 
 - `.env.local`은 git에 없으므로 **새 컴퓨터에서는 다시 만들어야 한다.** anon 키는 대시보드(Project Settings → API Keys → Legacy anon) 또는 `npx supabase projects api-keys --remote=gxmgjdfnncaihqbxowgq`에서 확인. **service_role / secret 키는 절대 앱에 넣지 않는다.**
