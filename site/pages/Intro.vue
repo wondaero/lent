@@ -9,7 +9,8 @@ import PageTitle from '@site/components/PageTitle.vue';
             <div class="content">
                 <div class="top">
                     <div class="image">
-                        <img src="/assets/images/page.intro.leader.png" alt="도서관장" loading="lazy" />
+                        <!-- 실제 관장 사진을 받기 전까지 캐릭터 그림(2026-11-13 사용자 요청) -->
+                        <img src="/assets/images/page.intro.leader.svg" alt="도서관장 캐릭터" loading="lazy" />
                     </div>
                     <div class="text">
                         <div class="header">

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" role="img" aria-label="도서관장 캐릭터">
+  <!-- 도서관장 사진 자리의 임시 캐릭터(실제 사진을 받으면 교체). 색은 메인 포인트 색 #2C4198 계열 -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eef1fa"/>
+      <stop offset="1" stop-color="#dfe5f5"/>
+    </linearGradient>
+  </defs>
+  <rect width="300" height="400" fill="url(#bg)"/>
+  <!-- 뒤쪽 책장 -->
+  <g opacity=".55">
+    <rect x="18" y="58" width="264" height="8" rx="2" fill="#c3cbe6"/>
+    <rect x="18" y="146" width="264" height="8" rx="2" fill="#c3cbe6"/>
+    <rect x="30" y="20" width="12" height="38" rx="2" fill="#9fb0e0"/>
+    <rect x="44" y="28" width="10" height="30" rx="2" fill="#f2c27b"/>
+    <rect x="56" y="16" width="14" height="42" rx="2" fill="#8fc7a8"/>
+    <rect x="72" y="24" width="9" height="34" rx="2" fill="#e8a39b"/>
+    <rect x="214" y="22" width="12" height="36" rx="2" fill="#f2c27b"/>
+    <rect x="228" y="14" width="14" height="44" rx="2" fill="#9fb0e0"/>
+    <rect x="244" y="26" width="10" height="32" rx="2" fill="#8fc7a8"/>
+    <rect x="256" y="18" width="12" height="40" rx="2" fill="#e8a39b"/>
+    <rect x="28" y="104" width="13" height="42" rx="2" fill="#8fc7a8"/>
+    <rect x="43" y="112" width="10" height="34" rx="2" fill="#9fb0e0"/>
+    <rect x="236" y="108" width="12" height="38" rx="2" fill="#e8a39b"/>
+    <rect x="250" y="100" width="14" height="46" rx="2" fill="#f2c27b"/>
+  </g>
+  <!-- 몸(정장) -->
+  <path d="M40 400 C40 318 86 286 150 286 C214 286 260 318 260 400 Z" fill="#2c4198"/>
+  <!-- 셔츠 깃 + 넥타이 -->
+  <path d="M120 290 L150 336 L180 290 Z" fill="#ffffff"/>
+  <path d="M143 300 L157 300 L161 352 L150 366 L139 352 Z" fill="#5a73c9"/>
+  <path d="M120 290 L136 346 L150 336 Z M180 290 L164 346 L150 336 Z" fill="#23367f"/>
+  <!-- 목 -->
+  <rect x="133" y="246" width="34" height="46" rx="12" fill="#f3c7a8"/>
+  <!-- 귀 -->
+  <ellipse cx="93" cy="190" rx="13" ry="18" fill="#f0bd9b"/>
+  <ellipse cx="207" cy="190" rx="13" ry="18" fill="#f0bd9b"/>
+  <!-- 얼굴 -->
+  <ellipse cx="150" cy="184" rx="58" ry="70" fill="#f8d3b6"/>
+  <!-- 머리카락 -->
+  <path d="M90 176 C84 118 118 96 152 96 C190 96 218 120 210 176 C204 150 186 132 158 130 C134 128 108 140 96 172 Z" fill="#3b3330"/>
+  <!-- 안경 -->
+  <g fill="none" stroke="#3b3330" stroke-width="4">
+    <rect x="106" y="170" width="38" height="28" rx="11"/>
+    <rect x="156" y="170" width="38" height="28" rx="11"/>
+    <path d="M144 182 Q150 177 156 182"/>
+  </g>
+  <!-- 눈 -->
+  <circle cx="125" cy="185" r="5" fill="#3b3330"/>
+  <circle cx="175" cy="185" r="5" fill="#3b3330"/>
+  <!-- 눈썹 -->
+  <path d="M112 162 Q125 155 138 161 M162 161 Q175 155 188 162" stroke="#3b3330" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <!-- 볼 -->
+  <ellipse cx="114" cy="214" rx="10" ry="6" fill="#f2a99a" opacity=".55"/>
+  <ellipse cx="186" cy="214" rx="10" ry="6" fill="#f2a99a" opacity=".55"/>
+  <!-- 입 -->
+  <path d="M132 222 Q150 238 168 222" stroke="#8a4a3a" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <!-- 안고 있는 책 -->
+  <g transform="translate(0 -18) rotate(-8 150 360)">
+    <rect x="96" y="334" width="108" height="72" rx="6" fill="#f2c27b"/>
+    <rect x="96" y="334" width="14" height="72" rx="4" fill="#d9a35a"/>
+    <rect x="122" y="350" width="64" height="7" rx="3.5" fill="#ffffff" opacity=".8"/>
+    <rect x="122" y="364" width="44" height="7" rx="3.5" fill="#ffffff" opacity=".6"/>
+  </g>
+  <!-- 손 -->
+  <ellipse cx="102" cy="350" rx="16" ry="13" fill="#f8d3b6"/>
+  <ellipse cx="202" cy="336" rx="16" ry="13" fill="#f8d3b6"/>
+</svg>

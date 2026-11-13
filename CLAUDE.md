@@ -24,6 +24,7 @@
     - 데이터: `site/services/api.ts`가 입구. Supabase 값이 있으면 `remote.ts`(공개 함수를 fetch로 호출, supabase-js 안 씀), 없으면 `mock.ts`(업무 화면 목업 `mockDb.js`를 같은 규칙으로 읽음). 두 구현 반환 형태가 같아야 한다.
     - **공개 데이터 = security definer 함수만**(`supabase/migrations/20261113120000_public_site.sql`): `public_books`(검색·신간, 띄어쓰기 무시, 분실·폐기 제외, 대출자 없이 반납 예정일만), `public_posts`/`public_post`(게시된 글만), `public_home`(장서 수·회원 수 합계 + 사진 있는 최근 활동 5개). **테이블·view 권한은 anon에게 계속 닫혀 있다.** 공개 항목을 늘릴 때는 이 함수들만 고친다.
     - 템플릿 그림은 Freepik 유료 라이선스(출처 표기 불필요), 증서 `doc/licenses/`.
+    - 도서관 소개의 관장 사진 자리는 **임시 캐릭터 그림**(`public/assets/images/page.intro.leader.svg`, 2026-11-13 사용자 요청). 실제 사진을 받으면 `site/pages/Intro.vue`의 그림 경로만 바꾼다(옛 템플릿 사진 `page.intro.leader.png`는 쓰지 않음).
   - `/admin/*` 새로고침: 배포는 `vercel.json` rewrites, 개발·미리보기는 `vite.config.js`의 `admin-spa-fallback`. 옛 업무 주소(`/books`, `/login` 등)는 `vercel.json`에서 `/admin/...`으로 임시 이동(직원 즐겨찾기용) → **메인이 같은 이름의 주소(예: `/posts`)를 쓰게 되면 그 줄을 지운다.**
   - 검색 노출: `robots.txt`는 `/admin`만 막음, `admin/index.html`은 `noindex`. 메인 `index.html`은 공개 전까지 `noindex`.
   - 4절 디자인 규칙은 업무 화면 기준이다. 메인은 lent26 디자인(포인트 색 `--color-point` 남색, Pretendard, bootstrap 유틸리티 클래스)을 따른다. 상태 용어(대출가능·대출중)는 4절과 같게.
@@ -278,15 +279,9 @@
 
 마지막 갱신 2026-11-13. 끝난 항목은 지운다.
 
-1. **공개 함수 마이그레이션 적용(아직 안 함).** Claude 실행이 권한 확인에서 막혔다 → 사용자가 직접 실행하거나 허용한다. 그 전에는 Supabase에 연결된 메인이 데이터를 못 불러온다(목업 모드는 동작).
-   ```bash
-   npx supabase@latest db query --remote --yes -f supabase/migrations/20261113120000_public_site.sql
-   npx supabase@latest migration repair 20261113120000 --status applied --remote --yes
-   ```
-   - PGlite로 anon 역할 시험은 통과했다. 시험한 내용: 띄어쓰기 무시 검색, 분실 제외, 임시저장 숨김, 대출 메모 미노출, 테이블 직접 조회 거부, 반납 예정일 KST.
-2. **적용 후 실제 데이터로 메인 확인**(`npm run dev` → http://localhost:5173/):
-   - 도서 검색·신간·공지·활동·홈 숫자.
-   - 활동 사진(Storage 공개 주소)이 뜨는지.
+1. 공개 함수 마이그레이션은 2026-11-13 적용함. 공개 키로 확인: 장서 8,889 · 회원 181(DB 값), 띄어쓰기 무시 검색, 신간 30일, 테이블·업무 함수 직접 호출은 거부. 관리자가 게시한 글은 메인에 나오고 임시저장은 안 나옴(실제 DB에서 시험 후 되돌림).
+2. **실제 데이터로 메인 확인(남은 것)**(`npm run dev` → http://localhost:5173/):
+   - 활동 사진(Storage 공개 주소)이 뜨는지: 관리자에서 사진 있는 활동 글을 실제로 게시해 본다(2026-11-13 기준 게시 글 0개).
    - 모바일(375px)에서 글 상세의 본문~사진 간격(마지막 수정 후 브라우저로 다시 보지 못함).
 3. **메인 정리할 것:**
    - `site/components/Header.vue`에 로그인 버튼용 스타일(`.account`, `.mobile-account`)이 남아 있다(화면에는 영향 없음). 지운다.
