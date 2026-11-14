@@ -180,6 +180,13 @@ export const books = {
     }
     return wait(rows)
   },
+  // 청구기호 라벨 다시 뽑기: 미출력 목록에 다시 넣는다 → 출력 확인 전까지 등록중(대출 불가)
+  async markLabelUnprinted(id) {
+    const b = db.books.find((x) => x.id === Number(id))
+    if (!b) return fail('도서를 찾을 수 없습니다.')
+    b.spine_label_printed = false
+    return wait(true)
+  },
   async markLabelPrinted(ids) {
     const set = new Set(ids)
     db.books.forEach((b) => { if (set.has(b.id)) b.spine_label_printed = true })

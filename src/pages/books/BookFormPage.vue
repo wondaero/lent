@@ -213,6 +213,24 @@ async function saveAndNew() {
 }
 
 // 삭제: 대출 중인 책은 확인 창을 띄우지 않고 바로 알린다(최종 검사는 서버에서 한 번 더)
+// 청구기호 라벨 다시 뽑기(사용자 결정 2026-11-14): 훼손·청구기호 변경 등. 미출력 목록에 다시 넣으면 출력 확인 전까지 등록중
+const reprintOpen = ref(false)
+const reprinting = ref(false)
+async function reprint() {
+  reprinting.value = true
+  try {
+    await books.markLabelUnprinted(props.id)
+    meta.value = { ...meta.value, spine_label_printed: false }
+    reprintOpen.value = false
+    toast('미출력 목록에 넣었습니다. 라벨 출력 화면에서 인쇄하세요.')
+  } catch (e) {
+    reprintOpen.value = false
+    toast.error(e)
+  } finally {
+    reprinting.value = false
+  }
+}
+
 const delOpen = ref(false)
 const deleting = ref(false)
 function askRemove() {
@@ -346,7 +364,11 @@ const preview = computed(() => callNumberLines(form))
           </div>
           <dl v-if="meta" class="meta">
             <dt>등록일</dt><dd class="num">{{ fmtDateTime(meta.created_at) }}</dd>
-            <dt>라벨</dt><dd>{{ meta.spine_label_printed ? '출력 완료' : '미출력(등록중 · 대출 불가)' }}</dd>
+            <dt>라벨</dt>
+            <dd>
+              <template v-if="meta.spine_label_printed">출력 완료 <button type="button" class="btn sm reprint" @click="reprintOpen = true">청구기호 다시 뽑기</button></template>
+              <template v-else>미출력(등록중 · 대출 불가) <router-link to="/print" class="to-print">라벨 출력 →</router-link></template>
+            </dd>
             <template v-if="meta.loan">
               <dt>대출자</dt><dd><router-link :to="`/members/${meta.loan.member_id}`">{{ meta.loan.member_name }}</router-link></dd>
               <dt>반납 예정</dt><dd class="num">{{ fmtDate(meta.loan.due_at) }}</dd>
@@ -426,6 +448,14 @@ const preview = computed(() => callNumberLines(form))
     </div>
   </section>
 
+  <ConfirmDialog :open="reprintOpen" title="청구기호 라벨 다시 뽑기" confirm-label="미출력 목록에 넣기" :danger="false" :busy="reprinting" @confirm="reprint" @cancel="reprintOpen = false">
+    <dl class="cd-meta">
+      <dt>등록번호</dt><dd class="num">{{ form.reg_no }}</dd>
+      <dt>서명</dt><dd>{{ form.title }}</dd>
+    </dl>
+    <p class="cd-note">라벨 출력 화면의 미출력 목록에 다시 넣습니다. 라벨을 출력하고 [잘 나왔어요]를 누르기 전까지 <b>등록중(대출 불가)</b>으로 표시됩니다.<template v-if="meta?.loan"> 지금은 대출 중이라 반납되면 등록중이 됩니다.</template></p>
+    <p v-if="guard.dirty.value" class="cd-note">고친 내용이 아직 저장되지 않았습니다. 청구기호를 고쳤다면 먼저 [저장]해야 새 청구기호로 인쇄됩니다.</p>
+  </ConfirmDialog>
   <ConfirmDialog :open="delOpen" title="도서 삭제" :busy="deleting" @confirm="remove" @cancel="delOpen = false">
     <dl class="cd-meta">
       <dt>등록번호</dt><dd class="num">{{ form.reg_no }}</dd>
@@ -455,6 +485,8 @@ const preview = computed(() => callNumberLines(form))
 .meta { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 18px 0 0; font-size: 13px; }
 .meta dt { color: var(--text-3); }
 .meta dd { margin: 0; }
+.reprint { margin-left: 6px; }
+.to-print { margin-left: 6px; }
 .reg-tip { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12.5px; color: var(--text-3); }
 .actions { display: grid; gap: 8px; }
 @media (max-width: 900px) {

@@ -7,6 +7,7 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   title: { type: String, required: true },
   confirmLabel: { type: String, default: '삭제' },
+  danger: { type: Boolean, default: true },   // false = 되돌릴 수 있는 확인(확정 버튼 primary)
   busy: { type: Boolean, default: false },   // 처리 중에는 닫히지 않게(요청이 끝나기 전에 화면을 떠나지 않도록)
 })
 const emit = defineEmits(['confirm', 'cancel'])
@@ -33,7 +34,7 @@ function cancel() {
         <div class="body"><slot /></div>
         <div class="foot">
           <button ref="cancelBtn" type="button" class="btn" :disabled="busy" @click="cancel">취소</button>
-          <button type="button" class="btn danger" :disabled="busy" @click="emit('confirm')">{{ busy ? '처리 중…' : confirmLabel }}</button>
+          <button type="button" class="btn" :class="danger ? 'danger' : 'primary'" :disabled="busy" @click="emit('confirm')">{{ busy ? '처리 중…' : confirmLabel }}</button>
         </div>
       </div>
     </div>

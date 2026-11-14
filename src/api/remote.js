@@ -171,6 +171,11 @@ export const books = {
     rows.total = body.total
     return rows
   },
+  // 청구기호 라벨 다시 뽑기: 미출력 목록에 다시 넣는다 → 출력 확인 전까지 등록중(대출 불가)
+  async markLabelUnprinted(id) {
+    await run((await sb()).from('books').update({ spine_label_printed: false }).eq('id', id))
+    return true
+  },
   async markLabelPrinted(ids) {
     if (!ids.length) return true
     await run((await sb()).from('books').update({ spine_label_printed: true }).in('id', ids))
