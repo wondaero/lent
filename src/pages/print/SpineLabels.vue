@@ -13,13 +13,15 @@ import PrintTip from './PrintTip.vue'
 const { s, reset, perPage, skip, paginate, startAt, sheetStyle } = useLabelSheet('lent.labelSettings', {
   type: 'call',       // call: 청구기호 전체 | class: 분류기호 | author: 저자기호
   showRegNo: false,
+  // 실제 라벨지(2026-11-14 사용자 확인): 라벨 30×31mm, 사이 가로 8mm·세로 11mm, 위 여백 28mm
+  //   → 5칸 × 6줄 = 30칸. 왼쪽 여백 = (210 − 30×5 − 8×4) ÷ 2 = 14mm, 아래 여백도 28mm(대칭)
   cols: 5,
-  width: 38,          // mm
-  height: 25,
-  gapX: 2,
-  gapY: 2,
-  top: 10,
-  left: 8,
+  width: 30,          // mm
+  height: 31,
+  gapX: 8,
+  gapY: 11,
+  top: 28,
+  left: 14,
   fontSize: 12,       // pt
 })
 

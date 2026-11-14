@@ -19,13 +19,15 @@ import PrintTip from './PrintTip.vue'
 
 const { s, v, reset, perPage, skip, paginate, startAt, sheetStyle } = useLabelSheet('lent.barcodeLabelSettings', {
   showLibrary: true,
+  // 실제 라벨지(2026-11-14 사용자 실측): 라벨 50×30mm, 사이 가로 15mm·세로 5mm, 위 여백 28.5mm
+  //   → 3칸 × 7줄 = 21칸(옛 시스템과 같음). 왼쪽 여백 = (210 − 50×3 − 15×2) ÷ 2 = 15mm, 아래도 28.5mm(대칭)
   cols: 3,
-  width: 64,          // mm
-  height: 26,
-  gapX: 3,
-  gapY: 2,
-  top: 8,
-  left: 5,
+  width: 50,          // mm
+  height: 30,
+  gapX: 15,
+  gapY: 5,
+  top: 28.5,
+  left: 15,
   fontSize: 10,       // pt
 })
 
