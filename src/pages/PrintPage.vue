@@ -62,7 +62,8 @@ watch(tab, (v) => { try { localStorage.setItem(TAB_KEY, v) } catch {} })
   .print-page { display: block !important; }
   .print-page .preview { display: block; padding: 0; overflow: visible; }
   .print-page .sheet { box-shadow: none; break-after: page; }
-  .print-page .label { outline: none; }
+  /* 칸 테두리는 화면 미리보기용. 시작 칸 표시(.start)가 더 구체적인 선택자라 그냥 none으로는 안 지워져 인쇄됐다 → 전부 강제로 끔 */
+  .print-page .label, .print-page .label.start, .print-page .label.pick { outline: none !important; box-shadow: none !important; }
   .print-page .label.used, .print-page .label.pick:hover { background: none; }
 }
 </style>

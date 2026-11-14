@@ -33,8 +33,10 @@ export function useLabelSheet(storageKey, defaults) {
   })
   const reset = () => Object.assign(s, defaults)
 
-  // A4 한 장에 들어가는 칸 수
-  const rowsPerPage = computed(() => Math.max(1, Math.floor((297 - v.value.top * 2 + v.value.gapY) / (v.value.height + v.value.gapY))))
+  // A4 한 장에 들어가는 줄 수. 아래 여백은 위와 같다고 보지 않는다(위 여백만 조정하는 일이 많음:
+  //   바코드 위 28.5 → 30.5mm로 바꾸자 "위=아래" 계산에서 7줄이 6줄로 줄었다). 프린터가 못 찍는 맨 아래 5mm만 비운다
+  const BOTTOM_MIN = 5
+  const rowsPerPage = computed(() => Math.max(1, Math.floor((297 - v.value.top - BOTTOM_MIN + v.value.gapY) / (v.value.height + v.value.gapY))))
   const perPage = computed(() => rowsPerPage.value * v.value.cols)
   const skip = computed(() => Math.min(Math.max(0, s.skip || 0), perPage.value - 1))
 
