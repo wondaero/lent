@@ -48,7 +48,11 @@ watch(tab, (v) => { try { localStorage.setItem(TAB_KEY, v) } catch {} })
 .print-page .label.pick { cursor: pointer; }
 .print-page .label.pick:hover { background: color-mix(in srgb, var(--brand) 12%, #fff); }
 .print-page .label.start { outline: 2px solid var(--brand); outline-offset: -2px; }
+.print-page .label .line, .print-page .reg { text-align: center; }
 .print-page .reg { font-size: .65em; font-weight: 400; margin-top: .2em; }
+/* 청구기호 라벨: 위쪽에 청구기호, 아래쪽에 등록번호. 라벨 가장자리와는 1.5mm만 띄운다(사용자 의견 2026-11-14) */
+.print-page .call-label { align-self: stretch; flex: 1; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 1.5mm 0; }
+.print-page .call-label .reg { font-size: .8em; margin-top: 0; }
 
 @media (max-width: 1100px) {
   .print-page { grid-template-columns: 1fr; }

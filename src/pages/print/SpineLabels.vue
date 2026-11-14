@@ -12,7 +12,7 @@ import PrintTip from './PrintTip.vue'
 
 const { s, reset, perPage, skip, paginate, startAt, sheetStyle } = useLabelSheet('lent.labelSettings', {
   type: 'call',       // call: 청구기호 전체 | class: 분류기호 | author: 저자기호
-  showRegNo: false,
+  showRegNo: false,   // 분류기호·저자기호만 뽑을 때만 해당. 청구기호 라벨은 등록번호가 항상 들어간다
   // 실제 라벨지(2026-11-14 사용자 확인): 라벨 30×31mm, 사이 가로 8mm·세로 11mm, 위 여백 28mm
   //   → 5칸 × 6줄 = 30칸. 왼쪽 여백 = (210 − 30×5 − 8×4) ÷ 2 = 14mm, 아래 여백도 28mm(대칭)
   cols: 5,
@@ -150,7 +150,7 @@ onBeforeRouteLeave(() => {
             <button :class="{ on: s.type === 'author' }" @click="s.type = 'author'">저자기호</button>
           </div>
           <LabelSheetFields :s="s" />
-          <label class="check"><input v-model="s.showRegNo" type="checkbox" /> 등록번호 함께 표시</label>
+          <label v-if="s.type !== 'call'" class="check"><input v-model="s.showRegNo" type="checkbox" /> 등록번호 함께 표시</label>
           <PrintTip />
           <button class="btn primary lg" :disabled="!labels.length" @click="print">인쇄 ({{ labels.length }}장 · A4 {{ pages.length }}매)</button>
         </div>
@@ -170,7 +170,15 @@ onBeforeRouteLeave(() => {
           :title="pi === 0 && !printing ? '이 칸부터 인쇄' : undefined"
           @click="!printing && startAt(pi, ci)"
         >
-          <template v-if="b">
+          <!-- 청구기호 라벨 형식(사용자 결정 2026-11-14): 가운데 정렬, 분류기호·저자기호(·권차 복본)는 라벨 위쪽에,
+               등록번호는 라벨 아래쪽에 붙이되 가장자리와 조금 띄운다(.call-label) -->
+          <div v-if="b && s.type === 'call'" class="call-label">
+            <div>
+              <div v-for="(line, li) in linesOf(b)" :key="li" class="line">{{ line }}</div>
+            </div>
+            <div class="reg">{{ b.reg_no }}</div>
+          </div>
+          <template v-else-if="b">
             <div v-for="(line, li) in linesOf(b)" :key="li" class="line">{{ line }}</div>
             <div v-if="s.showRegNo" class="reg">{{ b.reg_no }}</div>
           </template>
