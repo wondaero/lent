@@ -1,5 +1,6 @@
 // 메인(공개 화면)이 다루는 데이터. 공개 함수(public_books 등)가 내보내는 항목만 있다(회원·대출자 정보 없음)
-export type BookStatus = 'available' | 'loaned' | 'readonly' | 'hold';
+// registering = 등록중(청구기호 라벨 미출력, 아직 서가에 없고 대출 불가)
+export type BookStatus = 'available' | 'loaned' | 'readonly' | 'hold' | 'registering';
 export type BoardName = 'notice' | 'activity';
 
 export interface Paged<T> {

@@ -23,6 +23,8 @@ export function bookStatusLabel(book: { status: BookStatus }) {
             return { text: '관내열람', tone: 'muted' };
         case 'hold':
             return { text: '대출보류', tone: 'muted' };
+        case 'registering':
+            return { text: '등록중', tone: 'muted' };
         default:
             return { text: '대출가능', tone: 'ok' };
     }

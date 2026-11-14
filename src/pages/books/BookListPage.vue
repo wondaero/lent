@@ -2,7 +2,7 @@
 import { computed, onActivated, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { books } from '@/api'
-import { BOOK_STATUS, KDC, bookStatusText } from '@/lib/constants'
+import { BOOK_STATUS, KDC, REGISTERING, bookStatusOf, bookStatusText } from '@/lib/constants'
 import { addDays, fmtDate, num, callNumberLines, overdueDays } from '@/lib/format'
 import { parseCallQuery, hasCallTokens, classPrefix, isAuthorMarkOk } from '@/lib/callNumber'
 import { usePagedList } from '@/lib/usePagedList'
@@ -98,7 +98,10 @@ onActivated(() => {
       <SearchBox v-model="filters.keyword" placeholder="청구기호(813.6 마83ㄷ), 서명, 저자, 등록번호" />
       <select v-model="filters.status" class="select w-auto" aria-label="상태">
         <option value="">전체 상태</option>
-        <option v-for="(s, k) in BOOK_STATUS" :key="k" :value="k">{{ s.label }}</option>
+        <template v-for="(s, k) in BOOK_STATUS" :key="k">
+          <option :value="k">{{ s.label }}</option>
+          <option v-if="k === 'available'" value="registering">{{ REGISTERING.label }}</option>
+        </template>
       </select>
       <select v-model="filters.category" class="select w-auto" aria-label="분류">
         <option value="">전체 분류</option>
@@ -170,7 +173,7 @@ onActivated(() => {
               <td class="ellipsis" :title="b.publisher">{{ b.publisher }}</td>
               <td class="ellipsis">
                 <!-- 목록은 배지 + 반납 예정 월-일만(사용자 결정: 상태 칸을 좁게). 대출자·보류 사유는 마우스를 올리거나 상세에서 -->
-                <span class="badge" :class="BOOK_STATUS[b.status]?.tone" :title="b.loan ? `${b.loan.member_name} · 반납 예정 ${fmtDate(b.loan.due_at)}` : b.hold_reason || undefined">{{ BOOK_STATUS[b.status]?.label }}</span>
+                <span class="badge" :class="bookStatusOf(b)?.tone" :title="b.loan ? `${b.loan.member_name} · 반납 예정 ${fmtDate(b.loan.due_at)}` : b.hold_reason || (b.status === 'available' && !b.spine_label_printed ? '청구기호 라벨 미출력 · 출력하면 대출가능' : undefined)">{{ bookStatusOf(b)?.label }}</span>
                 <span v-if="b.loan" class="sub num" :class="{ late: overdueDays(b.loan.due_at) }">~{{ fmtDate(b.loan.due_at).slice(5) }}</span>
               </td>
               <td class="num muted nowrap">{{ fmtDate(b.created_at) }}</td>

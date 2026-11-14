@@ -2,7 +2,7 @@
 import { computed, nextTick, onActivated, onDeactivated, ref, shallowRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { members, loans } from '@/api'
-import { MEMBER_STATUS, bookStatusText } from '@/lib/constants'
+import { MEMBER_STATUS, bookStatusText, isRegistering } from '@/lib/constants'
 import { normalizeRegNo } from '@/lib/regNo'
 import { addDays, dueOf, fmtDate, overdueDays } from '@/lib/format'
 import { useToday } from '@/lib/useToday'
@@ -98,6 +98,9 @@ async function scan() {
     if (queue.value.some((q) => q.book.id === book.id)) return toast('이미 목록에 있는 도서입니다.', 'error')
     if (loan) {
       queue.value.push({ type: 'return', book, loan })
+    } else if (isRegistering(book)) {
+      // 등록은 했지만 청구기호 라벨을 아직 출력하지 않은 책: 대출 불가(DB loans_process도 거부)
+      toast(`"${book.title}" — 등록중(청구기호 라벨 미출력)이라 대출할 수 없습니다. 라벨 출력 후 대출해주세요.`, 'error')
     } else if (book.status === 'available') {
       queue.value.push({ type: 'loan', book })
     } else {

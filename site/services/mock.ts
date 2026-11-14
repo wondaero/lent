@@ -38,7 +38,7 @@ const api: SiteApi = {
             && (!kw || squash(text(b)).includes(kw) || (field === 'all' && b.reg_no.toLowerCase() === kw)));
         rows = rows.sort((a, b) => (newDays ? (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0) : 0)
             || a.title.localeCompare(b.title) || (a.call_sort_key < b.call_sort_key ? -1 : 1));
-        const items = rows.slice((page - 1) * size, page * size).map((b) => toBook({ ...b, due_on: dueOn(b) } as never));
+        const items = rows.slice((page - 1) * size, page * size).map((b) => toBook({ ...b, due_on: dueOn(b), status: b.status === 'available' && !b.spine_label_printed ? 'registering' : b.status } as never));
         return wait({ items, total: rows.length, page, size });
     },
     async posts(board, { q = '', page = 1, size = 15 }) {

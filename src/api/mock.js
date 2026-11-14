@@ -49,7 +49,10 @@ export const books = {
     let rows = db.books
     if (hasCallTokens(q)) rows = rows.filter((b) => matchCall(b, q))
     if (kw) rows = rows.filter((b) => b.reg_no.toLowerCase() === kw || has(b.title, kw) || has(b.series_title, kw) || has(b.author, kw) || has(b.publisher, kw) || has(b.isbn, kw))
-    if (status) rows = rows.filter((b) => b.status === status)
+    // 등록중(라벨 미출력 대출가능)은 status 값이 아니라 조합. 대출가능은 라벨까지 끝난 책만
+    if (status === 'registering') rows = rows.filter((b) => b.status === 'available' && !b.spine_label_printed)
+    else if (status === 'available') rows = rows.filter((b) => b.status === 'available' && b.spine_label_printed)
+    else if (status) rows = rows.filter((b) => b.status === status)
     if (label === 'unprinted') rows = rows.filter((b) => !b.spine_label_printed)
     if (category !== '') rows = rows.filter((b) => b.class_no[0] === String(category))
     if (from || to) {
@@ -343,8 +346,8 @@ export const loans = {
       if (memberStats(m.id).active_loans - freed + bookIds.length > m.loan_limit) return fail(`대출 한도(${m.loan_limit}권)를 초과합니다.`)
       if (new Set(bookIds).size !== bookIds.length) return fail('같은 도서가 두 번 들어 있습니다.')
       targets = bookIds.map(bookById)
-      const bad = targets.find((b) => !b || b.status !== 'available')
-      if (bad) return fail(`"${bad?.title ?? '알 수 없음'}"은(는) 대출할 수 없는 상태입니다.`)
+      const bad = targets.find((b) => !b || b.status !== 'available' || !b.spine_label_printed)
+      if (bad) return fail(`"${bad?.title ?? '알 수 없음'}"은(는) 대출할 수 없는 상태입니다(등록중이면 청구기호 라벨을 먼저 출력하세요).`)
       if (!dueAt) return fail('반납 예정일을 지정해주세요.')
     }
     const at = nowIso()

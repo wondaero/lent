@@ -14,8 +14,15 @@ export const BOOK_STATUS = {
 // 대출보류 사유 입력 칸의 추천 목록(직접 입력도 가능)
 export const HOLD_REASONS = ['파손', '수리 중', '분실 의심', '내용 검토', '정리 중']
 // 화면 표시용: "대출보류(파손)"
+// 등록중 = 등록은 했지만 청구기호 라벨을 아직 출력하지 않은 책(사용자 결정 2026-11-14). 대출할 수 없다.
+//   DB status 값이 아니라 status 'available' + spine_label_printed false에서 나온 표시용 상태.
+//   라벨 출력에서 [잘 나왔어요]를 누르면 저절로 대출가능이 된다. 목록 필터에서도 별도 항목
+export const REGISTERING = { label: '등록중', tone: 'amber' }
+export const isRegistering = (b) => b?.status === 'available' && b.spine_label_printed === false
+// 화면에 보일 상태 { label, tone }
+export const bookStatusOf = (b) => (isRegistering(b) ? REGISTERING : BOOK_STATUS[b?.status])
 export const bookStatusText = (b) => {
-  const label = BOOK_STATUS[b?.status]?.label ?? ''
+  const label = bookStatusOf(b)?.label ?? ''
   return b?.status === 'hold' && b.hold_reason ? `${label}(${b.hold_reason})` : label
 }
 

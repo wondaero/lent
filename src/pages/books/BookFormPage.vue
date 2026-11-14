@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { books, loans } from '@/api'
-import { BOOK_STATUS, HOLD_REASONS } from '@/lib/constants'
+import { BOOK_STATUS, HOLD_REASONS, REGISTERING } from '@/lib/constants'
 import { callNumberLines, dueOf, fmtDate, fmtDateTime, overdueDays } from '@/lib/format'
 import { makeAuthorMark } from '@/lib/callNumber'
 import { useLeaveGuard } from '@/lib/useLeaveGuard'
@@ -318,6 +318,10 @@ const preview = computed(() => callNumberLines(form))
             <select v-model="form.status" class="select" :disabled="form.status === 'loaned'">
               <option v-for="(s, k) in BOOK_STATUS" :key="k" :value="k" :disabled="k === 'loaned'">{{ s.label }}</option>
             </select>
+            <!-- 등록중: 대출가능으로 저장돼도 청구기호 라벨을 출력하기 전에는 빌려줄 수 없다(사용자 결정) -->
+            <small v-if="form.status === 'available' && (!meta || !meta.spine_label_printed)" class="reg-tip">
+              <span class="badge amber">{{ REGISTERING.label }}</span> 청구기호 라벨을 출력하면 대출가능이 됩니다.
+            </small>
           </label>
           <label v-if="form.status === 'hold'" class="field" :class="{ invalid: errors.hold_reason }">
             <span>보류 사유<b class="req">*</b></span>
@@ -342,7 +346,7 @@ const preview = computed(() => callNumberLines(form))
           </div>
           <dl v-if="meta" class="meta">
             <dt>등록일</dt><dd class="num">{{ fmtDateTime(meta.created_at) }}</dd>
-            <dt>라벨</dt><dd>{{ meta.spine_label_printed ? '출력 완료' : '미출력' }}</dd>
+            <dt>라벨</dt><dd>{{ meta.spine_label_printed ? '출력 완료' : '미출력(등록중 · 대출 불가)' }}</dd>
             <template v-if="meta.loan">
               <dt>대출자</dt><dd><router-link :to="`/members/${meta.loan.member_id}`">{{ meta.loan.member_name }}</router-link></dd>
               <dt>반납 예정</dt><dd class="num">{{ fmtDate(meta.loan.due_at) }}</dd>
@@ -451,6 +455,7 @@ const preview = computed(() => callNumberLines(form))
 .meta { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 18px 0 0; font-size: 13px; }
 .meta dt { color: var(--text-3); }
 .meta dd { margin: 0; }
+.reg-tip { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12.5px; color: var(--text-3); }
 .actions { display: grid; gap: 8px; }
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }

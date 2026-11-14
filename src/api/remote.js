@@ -71,7 +71,10 @@ export const books = {
     if (kw) {
       query = query.or([`reg_no.ilike.${quote(escLike(kw))}`, ...['title', 'series_title', 'author', 'publisher', 'isbn'].map((c) => contains(c, kw))].join(','))
     }
-    if (status) query = query.eq('status', status)
+    // 등록중(라벨 미출력 대출가능)은 status 값이 아니라 조합. 대출가능은 라벨까지 끝난 책만
+    if (status === 'registering') query = query.eq('status', 'available').eq('spine_label_printed', false)
+    else if (status === 'available') query = query.eq('status', 'available').eq('spine_label_printed', true)
+    else if (status) query = query.eq('status', status)
     if (label === 'unprinted') query = query.eq('spine_label_printed', false)
     if (category !== '') query = query.like('class_no', `${category}%`)
     if (from) query = query.gte('created_at', dayStart(from))
