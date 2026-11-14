@@ -50,8 +50,8 @@ watch(tab, (v) => { try { localStorage.setItem(TAB_KEY, v) } catch {} })
 .print-page .label.start { outline: 2px solid var(--brand); outline-offset: -2px; }
 .print-page .label .line, .print-page .reg { text-align: center; }
 .print-page .reg { font-size: .65em; font-weight: 400; margin-top: .2em; }
-/* 청구기호 라벨: 위쪽에 청구기호, 아래쪽에 등록번호. 라벨 가장자리와는 1.5mm만 띄운다(사용자 의견 2026-11-14) */
-.print-page .call-label { align-self: stretch; flex: 1; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 1.5mm 0; }
+/* 청구기호 라벨: 위쪽에 청구기호, 아래쪽에 등록번호. 라벨 가장자리와 3mm 띄운다: 용지를 조금 비뚤게 넣어도 글자가 라벨 밖으로 나가지 않게(사용자 의견 2026-11-14, 1.5mm에서 늘림) */
+.print-page .call-label { align-self: stretch; flex: 1; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 3mm 0; }
 .print-page .call-label .reg { font-size: .8em; margin-top: 0; }
 
 @media (max-width: 1100px) {
